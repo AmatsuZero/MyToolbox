@@ -26,6 +26,8 @@ from typing import Any, Callable, Dict, List, Optional
 
 import psutil
 
+from config_error_handler import ErrorHandlerConfig
+
 
 class ErrorLevel(Enum):
     """错误级别枚举"""
@@ -220,15 +222,6 @@ class RetryStrategy:
         return min(delay, self.max_delay)
 
 
-@dataclass
-class ErrorHandlerConfig:
-    """错误处理器配置"""
-
-    log_file: str = "error_log.json"
-    max_log_size_mb: int = 100
-    enable_performance_monitoring: bool = True
-
-
 class ErrorHandler:
     """错误处理器"""
 
@@ -239,9 +232,13 @@ class ErrorHandler:
         enable_performance_monitoring: bool = True,
     ):
         self.config = ErrorHandlerConfig(
-            log_file=log_file,
-            max_log_size_mb=max_log_size_mb,
-            enable_performance_monitoring=enable_performance_monitoring,
+            logging=ErrorHandlerConfig.LoggingConfig(
+                log_file=log_file,
+                max_log_size_mb=max_log_size_mb
+            ),
+            monitoring=ErrorHandlerConfig.MonitoringConfig(
+                enable_performance_monitoring=enable_performance_monitoring
+            )
         )
         self.error_log: List[ErrorInfo] = []
         self.performance_log: List[PerformanceMetrics] = []

@@ -32,7 +32,7 @@ from file_scanner import MediaFileScanner, MediaFile
 from format_converter import FormatConverter
 from whisper_integration import WhisperIntegration, TranscriptionResult, ModelConfig
 from subtitle_generator import SubtitleGenerator
-from error_handler import ErrorHandler, ErrorLevel
+from error_handler import ErrorHandler, ErrorLevel, ErrorContext
 from config import ConfigManager, ProjectConfig
 from cli_interface import CLIInterface
 
@@ -175,50 +175,68 @@ class SpeechToTextSystem:
             self.logger.info("正在初始化系统组件...")
 
             # 初始化文件扫描器
-            self.file_scanner = MediaFileScanner(
-                self.config.file_scanner.scan_directory
-            )
+            scan_dir = "media"  # 默认值
+            if self.config.file_scanner is not None and hasattr(
+                self.config.file_scanner, "scan_directory"
+            ):
+                scan_dir = self.config.file_scanner.scan_directory
+
+            self.file_scanner = MediaFileScanner(scan_dir)
 
             # 初始化格式转换器
             self.format_converter = FormatConverter(
                 self.config.format_converter.output_directory
+                if self.config.format_converter is not None
+                else "converted_audio"
             )
 
             # 初始化Whisper集成
             whisper_config = self.config.whisper
+
+            # 创建一个包含默认值的ModelConfig
             model_config = ModelConfig(
-                name=f"whisper_{whisper_config.model_size}",
-                size=whisper_config.model_size,
-                language=whisper_config.language,
-                device=whisper_config.device,
-                compute_type=whisper_config.compute_type,
-                temperature=whisper_config.temperature,
-                best_of=whisper_config.best_of,
-                beam_size=whisper_config.beam_size,
-                patience=whisper_config.patience,
-                length_penalty=whisper_config.length_penalty,
-                suppress_tokens=whisper_config.suppress_tokens,
-                initial_prompt=whisper_config.initial_prompt,
-                condition_on_previous_text=whisper_config.condition_on_previous_text,
-                compression_ratio_threshold=whisper_config.compression_ratio_threshold,
-                logprob_threshold=whisper_config.logprob_threshold,
-                no_speech_threshold=whisper_config.no_speech_threshold,
-                word_timestamps=whisper_config.word_timestamps,
-                prepend_punctuations=whisper_config.prepend_punctuations,
-                append_punctuations=whisper_config.append_punctuations,
+                name="whisper_base",  # 默认值，后面会更新
+                size="base",  # 默认值，后面会更新
             )
+
+            # 设置基本属性
+            if whisper_config is not None and hasattr(whisper_config, "model_size"):
+                model_config.name = f"whisper_{whisper_config.model_size}"
+                model_config.size = whisper_config.model_size
+            if whisper_config is not None and hasattr(whisper_config, "language"):
+                model_config.language = whisper_config.language
+            if whisper_config is not None and hasattr(whisper_config, "device"):
+                model_config.device = whisper_config.device
+
+            # 设置logprob_threshold默认值为-1.0
+            model_config.logprob_threshold = -1.0
             self.whisper_integration = WhisperIntegration(model_config)
 
             # 初始化字幕生成器
             self.subtitle_generator = SubtitleGenerator(
                 self.config.subtitle_generator.output_directory
+                if self.config.subtitle_generator is not None
+                else "subtitles"
             )
 
             # 启动性能监控
-            if self.config.error_handler.enable_performance_monitoring:
-                self.error_handler.start_performance_monitoring(
-                    self.config.error_handler.performance_monitoring_interval
-                )
+            enable_monitoring = False
+            monitoring_interval = 60  # 默认值，60秒
+
+            if self.config.error_handler is not None:
+                if hasattr(self.config.error_handler, "enable_performance_monitoring"):
+                    enable_monitoring = (
+                        self.config.error_handler.enable_performance_monitoring
+                    )
+                if hasattr(
+                    self.config.error_handler, "performance_monitoring_interval"
+                ):
+                    monitoring_interval = (
+                        self.config.error_handler.performance_monitoring_interval
+                    )
+
+            if enable_monitoring:
+                self.error_handler.start_performance_monitoring(monitoring_interval)
 
             self.logger.info("系统组件初始化完成")
             return True
@@ -242,7 +260,7 @@ class SpeechToTextSystem:
                 )
                 return []
 
-            directory = scan_directory or self.config.file_scanner.scan_directory
+            directory = scan_directory or self.file_scanner.scan_directory
 
             self.logger.info("正在扫描目录: %s", directory)
 
@@ -250,18 +268,31 @@ class SpeechToTextSystem:
             self.file_scanner.scan_directory = Path(directory)
 
             # 扫描文件
-            media_files = self.file_scanner.scan_files(
-                recursive=self.config.file_scanner.recursive
-            )
+            recursive = False  # 默认值
+            if self.config.file_scanner is not None and hasattr(
+                self.config.file_scanner, "recursive"
+            ):
+                recursive = self.config.file_scanner.recursive
+
+            media_files = self.file_scanner.scan_files(recursive=recursive)
 
             if not media_files:
                 self.logger.warning("未找到支持的媒体文件")
                 return []
 
             # 应用文件大小过滤
+            min_size_mb = 0  # 默认最小值 0MB
+            max_size_mb = 1024  # 默认最大值 1GB
+
+            if self.config.file_scanner is not None:
+                if hasattr(self.config.file_scanner, "min_file_size_mb"):
+                    min_size_mb = self.config.file_scanner.min_file_size_mb
+                if hasattr(self.config.file_scanner, "max_file_size_mb"):
+                    max_size_mb = self.config.file_scanner.max_file_size_mb
+
             media_files = self.file_scanner.filter_by_size(
-                min_size=self.config.file_scanner.min_file_size_mb * 1024 * 1024,
-                max_size=self.config.file_scanner.max_file_size_mb * 1024 * 1024,
+                min_size=min_size_mb * 1024 * 1024,
+                max_size=max_size_mb * 1024 * 1024,
             )
 
             stats = self.file_scanner.get_statistics()
@@ -309,14 +340,20 @@ class SpeechToTextSystem:
                 result = self.format_converter.convert_audio_format(media_file.path)
 
             if not result.success:
-                self.error_handler.log_error(
+                # 创建错误上下文对象
+                error_context = ErrorContext(
+                    file_path=str(media_file.path), file_size=media_file.size
+                )
+                # 创建日志错误参数对象
+                error_params = self.error_handler.LogErrorParams(
                     level=ErrorLevel.ERROR,
                     module="SpeechToTextSystem",
                     function="preprocess_media_file",
                     message=f"预处理失败: {result.error_message}",
-                    file_path=str(media_file.path),
-                    file_size=media_file.size,
+                    context=error_context,
                 )
+
+                self.error_handler.log_error(error_params=error_params)
                 return None
 
             self.logger.info("预处理完成: %s", result.output_file.name)
@@ -339,42 +376,74 @@ class SpeechToTextSystem:
             self.logger.info("开始语音识别: %s", audio_file.name)
 
             if self.whisper_integration is None:
-                self.error_handler.log_error(
+                # 创建错误上下文对象
+                error_context = ErrorContext(file_path=str(audio_file))
+
+                # 创建日志错误参数对象
+                error_params = self.error_handler.LogErrorParams(
                     level=ErrorLevel.ERROR,
                     module="SpeechToTextSystem",
                     function="transcribe_audio",
                     message="Whisper集成尚未初始化",
-                    file_path=str(audio_file),
+                    context=error_context,
                 )
+
+                self.error_handler.log_error(error_params=error_params)
                 return None
 
             # 加载模型（如果尚未加载）
             if self.whisper_integration.model is None:
-                if not self.whisper_integration.load_model(
-                    self.config.whisper.model_size
+                model_size = "base"  # 默认值
+                if (
+                    hasattr(self.config, "whisper")
+                    and self.config.whisper is not None
+                    and hasattr(self.config.whisper, "model_size")
                 ):
-                    self.error_handler.log_error(
+                    model_size = self.config.whisper.model_size
+
+                if not self.whisper_integration.load_model(model_size):
+                    # 创建错误上下文对象
+                    error_context = ErrorContext(file_path=str(audio_file))
+
+                    # 创建日志错误参数对象
+                    error_params = self.error_handler.LogErrorParams(
                         level=ErrorLevel.ERROR,
                         module="SpeechToTextSystem",
                         function="transcribe_audio",
                         message="Whisper模型加载失败",
-                        file_path=str(audio_file),
+                        context=error_context,
                     )
+
+                    self.error_handler.log_error(error_params=error_params)
                     return None
 
             # 执行转录
+            language = None
+            if (
+                hasattr(self.config, "whisper")
+                and self.config.whisper is not None
+                and hasattr(self.config.whisper, "language")
+            ):
+                language = self.config.whisper.language
+
             result = self.whisper_integration.transcribe_audio(
-                audio_file, language=self.config.whisper.language
+                audio_file, language=language
             )
 
             if not result.success:
-                self.error_handler.log_error(
+                # 创建错误上下文对象
+                error_context = ErrorContext(file_path=str(audio_file))
+
+                # 创建日志错误参数对象
+                error_params = self.error_handler.LogErrorParams(
                     level=ErrorLevel.ERROR,
                     module="SpeechToTextSystem",
                     function="transcribe_audio",
                     message=f"语音识别失败: {result.error_message}",
-                    file_path=str(audio_file),
+                    context=error_context,
                 )
+
+                self.error_handler.log_error(error_params=error_params)
                 return None
 
             self.logger.info(
@@ -411,16 +480,29 @@ class SpeechToTextSystem:
             self.logger.info("生成字幕文件...")
 
             if self.subtitle_generator is None:
-                self.error_handler.log_error(
+                # 创建错误上下文对象
+                error_context = ErrorContext()
+
+                # 创建日志错误参数对象
+                error_params = self.error_handler.LogErrorParams(
                     level=ErrorLevel.ERROR,
                     module="SpeechToTextSystem",
                     function="generate_subtitles",
                     message="字幕生成器尚未初始化",
+                    context=error_context,
                 )
+
+                self.error_handler.log_error(error_params=error_params)
                 return {}
 
             if output_formats is None:
-                output_formats = self.config.subtitle_generator.supported_formats or []
+                output_formats = []
+                if self.config.subtitle_generator is not None and hasattr(
+                    self.config.subtitle_generator, "supported_formats"
+                ):
+                    output_formats = (
+                        self.config.subtitle_generator.supported_formats or []
+                    )
 
             # 创建字幕片段
             segments = self.subtitle_generator.create_segments_from_transcription(
@@ -578,7 +660,18 @@ class SpeechToTextSystem:
                 self.processing_stats["failed_files"] += 1
 
             # 内存优化
-            if self.config.performance.enable_memory_optimization and i % 5 == 0:
+            enable_memory_optimization = False
+
+            if (
+                hasattr(self.config, "performance")
+                and self.config.performance is not None
+            ):
+                # 使用 getattr 安全地获取属性值
+                enable_memory_optimization = getattr(
+                    self.config.performance, "enable_memory_optimization", False
+                )
+
+            if enable_memory_optimization and i % 5 == 0:
                 self.error_handler.optimize_memory()
 
         self.processing_stats["end_time"] = time.time()
@@ -674,9 +767,12 @@ class SpeechToTextSystem:
             results = self.process_batch_files(media_files)
 
             # 生成摘要报告
-            self.generate_summary_report(
-                results, self.config.subtitle_generator.output_directory
-            )
+            # 获取字幕输出目录
+            output_dir = "subtitles"
+            if self.config.subtitle_generator is not None:
+                output_dir = self.config.subtitle_generator.output_directory
+
+            self.generate_summary_report(results, output_dir)
 
             # 输出结果
             self.logger.info(
