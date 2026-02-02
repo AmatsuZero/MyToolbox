@@ -108,3 +108,4 @@ models/
 converted_audio/
 subtitles/
 error_log.*.json
+idea/

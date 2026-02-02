@@ -35,7 +35,7 @@ from file_scanner import MediaFile, MediaFileScanner
 from format_converter import FormatConverter
 from subtitle_generator import SubtitleGenerator
 from whisper_config import WhisperConfigManager
-from whisper_integration import WhisperIntegration
+from whisper_integration import WhisperIntegration, create_model_config
 
 
 class CLIInterface:
@@ -109,6 +109,20 @@ class CLIInterface:
             choices=["auto", "cpu", "cuda", "mps"],
             default="auto",
             help="计算设备（默认：auto）",
+        )
+        model_group.add_argument(
+            "--engine",
+            type=str,
+            choices=["auto", "whisperkit", "faster-whisper", "openai-whisper"],
+            default="auto",
+            help="转录引擎（默认：auto）",
+        )
+        model_group.add_argument(
+            "--compute-type",
+            type=str,
+            choices=["default", "int8", "int8_float16", "float16", "float32"],
+            default="default",
+            help="量化类型（默认：default）",
         )
 
         # 输出参数
@@ -461,8 +475,34 @@ class CLIInterface:
 
         # 初始化组件
         self.logger.info("初始化组件...")
-        whisper_integration = WhisperIntegration()
+        engine_choice = args.engine if args.engine != "auto" else config.get("engine")
+        compute_type = (
+            args.compute_type
+            if args.compute_type != "default"
+            else config.get("compute_type", "default")
+        )
+        device_choice = (
+            args.device if args.device != "auto" else config.get("device", "auto")
+        )
+        model_config = create_model_config(
+            model_size=args.model,
+            language=args.language,
+            device=device_choice,
+            compute_type=compute_type,
+            engine=engine_choice,
+        )
+        whisper_integration = WhisperIntegration(model_config)
         subtitle_generator = SubtitleGenerator(args.output)
+
+        config.update(
+            {
+                "model": args.model,
+                "language": args.language,
+                "device": device_choice,
+                "engine": engine_choice,
+                "compute_type": compute_type,
+            }
+        )
 
         # 加载模型
         if not whisper_integration.load_model(args.model):

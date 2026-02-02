@@ -76,7 +76,6 @@ class SubtitleStyle:
     def __post_init__(self):
         """初始化后处理"""
         # 已经使用 default_factory 初始化，不需要额外处理
-        pass
 
     # 属性访问器，保持向后兼容性
     @property

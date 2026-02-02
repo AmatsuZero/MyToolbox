@@ -23,64 +23,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union, cast
 
-import torch
-import whisper
+from format_converter import FormatConverter
+from whisper_engines import EngineSelector
+from whisper_engines.base_engine import EngineOptions, WhisperEngine
+from whisper_engines.engine_registry import EngineRegistry
 
-
-def _patch_mps_float64():
-    """
-    修补 MPS 后端的 float64 问题。
-    MPS 不支持 float64，通过 monkey patch 将相关操作重定向到 float32。
-    """
-    if not torch.backends.mps.is_available():
-        return
-
-    # 保存原始的 torch.Tensor.to 方法
-    _original_to = torch.Tensor.to
-
-    def _patched_to(self, *args, **kwargs):
-        # 如果目标是 MPS 设备且 tensor 是 float64，先转为 float32
-        device = None
-        dtype = kwargs.get("dtype", None)
-
-        if args:
-            if isinstance(args[0], torch.device):
-                device = args[0]
-            elif isinstance(args[0], str):
-                device = torch.device(args[0])
-            elif isinstance(args[0], torch.dtype):
-                dtype = args[0]
-
-        # 检查是否转移到 MPS
-        is_to_mps = (device is not None and device.type == "mps") or (
-            device is None and self.device.type == "mps"
-        )
-
-        # 如果是 float64 且目标是 MPS，先转为 float32
-        if is_to_mps and torch.float64 in (self.dtype, dtype):
-            self = self.float()  # 转为 float32
-            if dtype == torch.float64:
-                kwargs["dtype"] = torch.float32
-
-        return _original_to(self, *args, **kwargs)
-
-    torch.Tensor.to = _patched_to
-
-    # 同时修补 numpy 转 tensor 的默认行为
-    _original_from_numpy = torch.from_numpy
-
-    def _patched_from_numpy(ndarray):
-        tensor = _original_from_numpy(ndarray)
-        # 如果是 float64，转为 float32
-        if tensor.dtype == torch.float64:
-            tensor = tensor.float()
-        return tensor
-
-    torch.from_numpy = _patched_from_numpy
-
-
-# 在导入时就执行修补
-_patch_mps_float64()
 
 
 @dataclass
@@ -115,7 +62,9 @@ class ModelConfig:  # pylint: disable=too-many-instance-attributes
     language: str = "auto"
     device: str = "auto"
     compute_type: str = "default"
+    engine: Optional[str] = None
     temperature: float = 0.0
+
     best_of: int = 5
     beam_size: int = 5
     patience: float = 1.0
@@ -160,9 +109,11 @@ class WhisperIntegration:
 
     def __init__(self, model_config: Optional[ModelConfig] = None):
         self.config = model_config or ModelConfig("default", "base")
-        self.model = None
+        self.engine_selector = EngineSelector()
+        self.engine: Optional[WhisperEngine] = None
+        self.engine_name: Optional[str] = None
         self.logger = self._setup_logger()
-        self._setup_device()
+        self._last_progress_update = 0.0
 
     def _setup_logger(self) -> logging.Logger:
         """设置日志记录器"""
@@ -179,24 +130,6 @@ class WhisperIntegration:
 
         return logger
 
-    def _setup_device(self):
-        """设置计算设备"""
-        if self.config.device == "auto":
-            if torch.cuda.is_available():
-                self.config.device = "cuda"
-                self.logger.info("使用 CUDA GPU 加速")
-            elif torch.backends.mps.is_available():
-                self.config.device = "mps"
-                self.logger.info("使用 Apple Silicon GPU 加速")
-                # MPS 不支持 float64，提前设置默认 dtype 为 float32
-                torch.set_default_dtype(torch.float32)
-            else:
-                self.config.device = "cpu"
-                self.logger.info("使用 CPU 进行计算")
-        elif self.config.device == "mps":
-            # 显式指定 MPS 时也需要设置 float32
-            torch.set_default_dtype(torch.float32)
-
     def load_model(self, model_size: Optional[str] = None) -> bool:
         """加载Whisper模型"""
         if model_size:
@@ -206,46 +139,47 @@ class WhisperIntegration:
             self.logger.error("不支持的模型大小: %s", self.config.size)
             return False
 
+        options = EngineOptions(
+            device=self.config.device,
+            compute_type=self.config.compute_type,
+            preferred_engine=self.config.engine,
+        )
+        registry = EngineRegistry()
+
         try:
-            self.logger.info("正在加载 Whisper %s 模型...", self.config.size)
-            start_time = time.time()
-
-            # 对于 MPS 设备，先在 CPU 上加载模型再转移，避免 float64 问题
-            if self.config.device == "mps":
-                self.model = whisper.load_model(
-                    self.config.size, device="cpu", download_root="./models"
-                )
-                # 将模型转换为 float32 后再移至 MPS
-                self.model = self.model.float().to("mps")
-            else:
-                self.model = whisper.load_model(
-                    self.config.size,
-                    device=self.config.device,
-                    download_root="./models",
-                )
-
-            load_time = time.time() - start_time
-            self.logger.info("模型加载完成，耗时: %.2f秒", load_time)
-
-            return True
-
-        except (
-            torch.cuda.CudaError,
-            torch.cuda.OutOfMemoryError,
-            RuntimeError,
-            OSError,
-            ValueError,
-            ImportError,
-        ) as e:
-            self.logger.error("模型加载失败: %s", str(e))
+            fallback_order = self.engine_selector.get_fallback_order(self.config.engine)
+        except ValueError as exc:
+            self.logger.error("引擎选择失败: %s", exc)
             return False
+
+        self.logger.info("引擎选择顺序: %s", ", ".join(fallback_order))
+
+        for name in fallback_order:
+            engine = registry.get_engine(name)
+            if not engine:
+                continue
+
+            engine.configure(options)
+            if not engine.is_available():
+                continue
+
+            if engine.load_model(self.config.size):
+                self.engine = engine
+                self.engine_name = engine.name
+                self.logger.info("已选择引擎: %s", engine.name)
+                return True
+
+            self.logger.warning("引擎 %s 模型加载失败，尝试回退", name)
+
+        self.logger.error("未找到可用引擎")
+        return False
 
     def transcribe_audio(
         self, audio_file: Path, language: Optional[str] = None
     ) -> TranscriptionResult:
         """转录音频文件"""
 
-        if not self.model:
+        if not self.engine:
             if not self.load_model():
                 return TranscriptionResult(
                     audio_file=audio_file,
@@ -273,100 +207,87 @@ class WhisperIntegration:
             )
 
         try:
-            self.logger.info("开始转录: %s", audio_file.name)
+            audio_duration = self._get_audio_duration(audio_file)
+            self.logger.info(
+                "开始转录: %s (引擎: %s, 音频时长: %.2f秒)",
+                audio_file.name,
+                self.engine_name or "unknown",
+                audio_duration,
+            )
             start_time = time.time()
 
-            # 构建转录选项
-            # 处理语言参数："auto" 或空值表示自动检测，需要设为 None
             effective_language = language or self.config.language
             if effective_language in ("auto", "", None):
-                effective_language = None  # Whisper 使用 None 表示自动语言检测
+                effective_language = None
 
-            options = {
-                "language": effective_language,
-                "temperature": self.config.temperature,
-                "best_of": self.config.best_of,
-                "beam_size": self.config.beam_size,
-                "patience": self.config.patience,
-                "length_penalty": self.config.length_penalty,
-                "suppress_tokens": self.config.suppress_tokens,
-                "initial_prompt": self.config.initial_prompt,
-                "condition_on_previous_text": self.config.condition_on_previous_text,
-                "compression_ratio_threshold": self.config.compression_ratio_threshold,
-                "logprob_threshold": self.config.logprob_threshold,
-                "no_speech_threshold": self.config.no_speech_threshold,
-                "word_timestamps": self.config.word_timestamps,
-                "prepend_punctuations": self.config.prepend_punctuations,
-                "append_punctuations": self.config.append_punctuations,
-            }
+            def _progress_callback(progress: float, message: str) -> None:
+                now = time.time()
+                if progress >= 1.0 or now - self._last_progress_update >= 5:
+                    self._last_progress_update = now
+                    percent = int(progress * 100)
+                    if audio_duration > 0 and progress > 0:
+                        elapsed = now - start_time
+                        rtf = elapsed / (audio_duration * progress)
+                        self.logger.info(
+                            "转录进度: %d%%, %s, 实时率: %.2f",
+                            percent,
+                            message,
+                            rtf,
+                        )
+                    else:
+                        self.logger.info("转录进度: %d%%, %s", percent, message)
 
-            # MPS 后端不支持 float64；强制关闭 fp16，避免内部走到不兼容的 dtype 分支
-            if self.config.device == "mps":
-                options["fp16"] = False
-                # 强制设置默认类型为 float32
-                torch.set_default_dtype(torch.float32)
+            result = self.engine.transcribe(
+                audio_file,
+                effective_language,
+                progress_callback=_progress_callback,
+            )
 
-            # 执行转录
-            # 对于 MPS 设备，使用 CPU 进行转录以避免 float64 问题，然后将结果用于后续处理
-            if self.config.device == "mps" and self.model is not None:
-                # 临时将模型移到 CPU 执行转录，避免 MPS 的 float64 限制
-                self.model = self.model.to("cpu")
-                result: Any = self.model.transcribe(str(audio_file), **options)
-                # 转录完成后将模型移回 MPS
-                self.model = self.model.float().to("mps")
-            elif self.model is not None:
-                result: Any = self.model.transcribe(str(audio_file), **options)
-            else:
-                # 这个分支理论上不会到达，因为前面已经检查过了
-                raise RuntimeError("模型未正确加载")
-
-            processing_time = time.time() - start_time
-
-            # 计算平均置信度（兼容缺失/None 的 avg_logprob）
-            segments_list = result.get("segments", [])
-            if isinstance(segments_list, list):
-                avg_confidence = (
-                    sum(
-                        float(segment.get("avg_logprob", 0.0) or 0.0)
-                        for segment in segments_list
-                    )
-                    / len(segments_list)
-                    if segments_list
-                    else 0.0
+            if not result.success:
+                return TranscriptionResult(
+                    audio_file=audio_file,
+                    text="",
+                    segments=[],
+                    language="",
+                    confidence=0.0,
+                    processing_time=0.0,
+                    model_used=f"{result.engine_name}:{result.model_used}",
+                    error_message=result.error_message or "转录失败",
+                    success=False,
                 )
+
+            processing_time = result.processing_time
+            if processing_time <= 0:
+                processing_time = time.time() - start_time
+
+            if audio_duration > 0:
+                rtf = processing_time / audio_duration
+                self.logger.info("转录完成，耗时: %.2f秒, 实时率: %.2f", processing_time, rtf)
             else:
-                segments_list = []
-                avg_confidence = 0.0
+                self.logger.info("转录完成，耗时: %.2f秒", processing_time)
 
-            transcription_result = TranscriptionResult(
+            segments = cast(List[Dict[str, Union[str, float, int]]], result.segments)
+            if not segments and result.text.strip():
+                fallback_end = audio_duration if audio_duration > 0 else 1.0
+                segments = [
+                    {
+                        "start": 0.0,
+                        "end": fallback_end,
+                        "text": result.text.strip(),
+                    }
+                ]
+
+            return TranscriptionResult(
                 audio_file=audio_file,
-                text=str(result.get("text", "")),
-                segments=cast(List[Dict[str, Union[str, float, int]]], segments_list),
-                language=str(result.get("language", "")),
-                confidence=avg_confidence,
+                text=result.text,
+                segments=segments,
+                language=result.language,
+                confidence=result.confidence,
                 processing_time=processing_time,
-                model_used=self.config.size,
+                model_used=f"{result.engine_name}:{result.model_used}",
             )
 
-            self.logger.info(
-                "转录完成: %s, 耗时: %.2f秒, 置信度: %.2f",
-                audio_file.name,
-                processing_time,
-                avg_confidence,
-            )
-
-            return transcription_result
-
-        except (
-            RuntimeError,
-            OSError,
-            ValueError,
-            torch.cuda.CudaError,
-            torch.cuda.OutOfMemoryError,
-            AttributeError,
-            TypeError,
-            KeyError,
-        ) as e:
+        except (RuntimeError, OSError, ValueError, AttributeError, TypeError) as e:
             error_msg = f"转录过程中发生错误: {str(e)}"
             self.logger.error(error_msg)
             return TranscriptionResult(
@@ -386,7 +307,7 @@ class WhisperIntegration:
     ) -> List[TranscriptionResult]:
         """批量转录音频文件"""
 
-        if not self.model:
+        if not self.engine:
             if not self.load_model():
                 return []
 
@@ -405,16 +326,23 @@ class WhisperIntegration:
 
     def get_model_info(self) -> Dict:
         """获取模型信息"""
-        if not self.model:
+        if not self.engine:
             return {"error": "模型未加载"}
 
-        return {
-            "model_size": self.config.size,
-            "device": self.config.device,
-            "model_info": self.MODEL_SIZES.get(self.config.size, {}),
-            "is_multilingual": hasattr(self.model, "is_multilingual")
-            and self.model.is_multilingual,
-        }
+        info = self.engine.get_device_info()
+        info["model_size"] = self.config.size
+        return info
+
+    def _get_audio_duration(self, audio_file: Path) -> float:
+        converter = FormatConverter()
+        info = converter.get_file_info(audio_file)
+        if not info or "format" not in info:
+            return 0.0
+        duration = info.get("format", {}).get("duration")
+        try:
+            return float(duration)
+        except (TypeError, ValueError):
+            return 0.0
 
     def optimize_for_language(self, language: str) -> bool:
         """为特定语言优化配置"""
@@ -467,7 +395,9 @@ class WhisperIntegration:
                     "language": self.config.language,
                     "device": self.config.device,
                     "compute_type": self.config.compute_type,
+                    "engine": self.config.engine,
                     "temperature": self.config.temperature,
+
                     "best_of": self.config.best_of,
                     "beam_size": self.config.beam_size,
                     "patience": self.config.patience,
@@ -518,11 +448,20 @@ class WhisperIntegration:
 
 
 def create_model_config(
-    model_size: str = "base", language: str = "auto", device: str = "auto"
+    model_size: str = "base",
+    language: str = "auto",
+    device: str = "auto",
+    compute_type: str = "default",
+    engine: Optional[str] = None,
 ) -> ModelConfig:
     """创建模型配置的便捷函数"""
     return ModelConfig(
-        name=f"whisper_{model_size}", size=model_size, language=language, device=device
+        name=f"whisper_{model_size}",
+        size=model_size,
+        language=language,
+        device=device,
+        compute_type=compute_type,
+        engine=engine,
     )
 
 

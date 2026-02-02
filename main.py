@@ -207,6 +207,10 @@ class SpeechToTextSystem:
                 model_config.language = whisper_config.language
             if whisper_config is not None and hasattr(whisper_config, "device"):
                 model_config.device = whisper_config.device
+            if whisper_config is not None and hasattr(whisper_config, "compute_type"):
+                model_config.compute_type = whisper_config.compute_type
+            if whisper_config is not None and hasattr(whisper_config, "engine"):
+                model_config.engine = whisper_config.engine
 
             # 设置logprob_threshold默认值为-1.0
             model_config.logprob_threshold = -1.0
