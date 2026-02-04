@@ -11,5 +11,16 @@ dependencies = [
     "torch",
     "torchaudio",
     "PyYAML",
+]
+
+[project.optional-dependencies]
+gui = [
+    "flask>=3.0.0",
+    "flask-cors>=4.0.0",
+]
+tts = [
     "mycroft-mimic3-tts>=0.2.4",
 ]
+
+[tool.setuptools.packages.find]
+include = ["core*", "config*", "modules*", "web*", "whisper_engines*"]

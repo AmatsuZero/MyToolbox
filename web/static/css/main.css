@@ -1,0 +1,462 @@
+/**
+ * MyToolbox 主样式文件
+ *
+ * 包含全局样式、响应式布局和暗色模式支持
+ */
+
+/* ==================== 根变量定义 ==================== */
+:root {
+    --primary-color: #0d6efd;
+    --primary-hover: #0b5ed7;
+    --success-color: #198754;
+    --warning-color: #ffc107;
+    --danger-color: #dc3545;
+    --info-color: #0dcaf0;
+
+    --bg-color: #f8f9fa;
+    --card-bg: #ffffff;
+    --text-color: #212529;
+    --text-muted: #6c757d;
+    --border-color: #dee2e6;
+
+    --transition-fast: 0.15s ease;
+    --transition-normal: 0.3s ease;
+    --shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    --shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    --shadow-lg: 0 1rem 3rem rgba(0, 0, 0, 0.175);
+}
+
+/* 暗色模式变量 */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg-color: #1a1a2e;
+        --card-bg: #16213e;
+        --text-color: #e9ecef;
+        --text-muted: #adb5bd;
+        --border-color: #2d3748;
+    }
+
+    body {
+        background-color: var(--bg-color);
+        color: var(--text-color);
+    }
+
+    .navbar {
+        background-color: #0f3460 !important;
+    }
+
+    .card {
+        background-color: var(--card-bg);
+        border-color: var(--border-color);
+    }
+
+    .bg-light {
+        background-color: #16213e !important;
+    }
+
+    .text-muted {
+        color: var(--text-muted) !important;
+    }
+
+    .border-top {
+        border-color: var(--border-color) !important;
+    }
+
+    .form-control, .form-select {
+        background-color: #1a1a2e;
+        border-color: var(--border-color);
+        color: var(--text-color);
+    }
+
+    .form-control:focus, .form-select:focus {
+        background-color: #1a1a2e;
+        border-color: var(--primary-color);
+        color: var(--text-color);
+    }
+
+    .list-group-item {
+        background-color: var(--card-bg);
+        border-color: var(--border-color);
+        color: var(--text-color);
+    }
+}
+
+/* ==================== 全局样式 ==================== */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+}
+
+/* 平滑滚动 */
+html {
+    scroll-behavior: smooth;
+}
+
+/* 选中文字样式 */
+::selection {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+/* ==================== 卡片样式 ==================== */
+.card {
+    border: none;
+    border-radius: 1rem;
+    box-shadow: var(--shadow-sm);
+    transition: transform var(--transition-normal), box-shadow var(--transition-normal);
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow);
+}
+
+.card-feature {
+    cursor: pointer;
+    text-decoration: none;
+    color: inherit;
+}
+
+.card-feature:hover {
+    color: inherit;
+}
+
+.card-feature .card-icon {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    margin-bottom: 1rem;
+    transition: transform var(--transition-normal);
+}
+
+.card-feature:hover .card-icon {
+    transform: scale(1.1);
+}
+
+/* ==================== 文件上传区域 ==================== */
+.upload-zone {
+    border: 2px dashed var(--border-color);
+    border-radius: 1rem;
+    padding: 3rem;
+    text-align: center;
+    transition: all var(--transition-normal);
+    cursor: pointer;
+    background-color: var(--card-bg);
+}
+
+.upload-zone:hover,
+.upload-zone.dragover {
+    border-color: var(--primary-color);
+    background-color: rgba(13, 110, 253, 0.05);
+}
+
+.upload-zone.dragover {
+    transform: scale(1.02);
+    box-shadow: 0 0 20px rgba(13, 110, 253, 0.2);
+}
+
+.upload-zone .upload-icon {
+    font-size: 4rem;
+    color: var(--text-muted);
+    transition: color var(--transition-normal);
+}
+
+.upload-zone:hover .upload-icon,
+.upload-zone.dragover .upload-icon {
+    color: var(--primary-color);
+}
+
+.upload-zone input[type="file"] {
+    display: none;
+}
+
+/* ==================== 进度条样式 ==================== */
+.progress {
+    height: 1.5rem;
+    border-radius: 0.5rem;
+    background-color: var(--border-color);
+    overflow: hidden;
+}
+
+.progress-bar {
+    transition: width var(--transition-normal);
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.progress-bar.progress-bar-animated {
+    animation: progress-bar-stripes 1s linear infinite;
+}
+
+/* ==================== 文件列表样式 ==================== */
+.file-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.file-item {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color var(--transition-fast);
+}
+
+.file-item:hover {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+.file-item:last-child {
+    border-bottom: none;
+}
+
+.file-item .file-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 1rem;
+    font-size: 1.25rem;
+}
+
+.file-item .file-icon.audio {
+    background-color: rgba(25, 135, 84, 0.1);
+    color: var(--success-color);
+}
+
+.file-item .file-icon.video {
+    background-color: rgba(13, 110, 253, 0.1);
+    color: var(--primary-color);
+}
+
+.file-item .file-icon.subtitle {
+    background-color: rgba(255, 193, 7, 0.1);
+    color: var(--warning-color);
+}
+
+.file-item .file-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.file-item .file-name {
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.file-item .file-size {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+}
+
+.file-item .file-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* ==================== 状态指示器 ==================== */
+.status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 2rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.status-indicator.pending {
+    background-color: rgba(108, 117, 125, 0.1);
+    color: var(--text-muted);
+}
+
+.status-indicator.processing {
+    background-color: rgba(13, 202, 240, 0.1);
+    color: var(--info-color);
+}
+
+.status-indicator.completed {
+    background-color: rgba(25, 135, 84, 0.1);
+    color: var(--success-color);
+}
+
+.status-indicator.failed {
+    background-color: rgba(220, 53, 69, 0.1);
+    color: var(--danger-color);
+}
+
+/* 状态图标动画 */
+.status-indicator.processing .spinner-icon {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* ==================== 参数配置面板 ==================== */
+.config-panel {
+    background-color: var(--card-bg);
+    border-radius: 1rem;
+    padding: 1.5rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.config-panel .form-label {
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+
+.config-panel .form-text {
+    font-size: 0.8125rem;
+}
+
+/* ==================== 结果展示区域 ==================== */
+.result-section {
+    margin-top: 2rem;
+    padding: 1.5rem;
+    background-color: var(--card-bg);
+    border-radius: 1rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.result-section .result-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+}
+
+.result-section .download-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.download-item {
+    display: flex;
+    align-items: center;
+    padding: 1rem;
+    background-color: rgba(0, 0, 0, 0.02);
+    border-radius: 0.5rem;
+    text-decoration: none;
+    color: inherit;
+    transition: all var(--transition-fast);
+}
+
+.download-item:hover {
+    background-color: rgba(13, 110, 253, 0.1);
+    color: var(--primary-color);
+}
+
+/* ==================== 响应式布局 ==================== */
+@media (max-width: 768px) {
+    .upload-zone {
+        padding: 2rem 1rem;
+    }
+
+    .upload-zone .upload-icon {
+        font-size: 3rem;
+    }
+
+    .card-feature .card-icon {
+        width: 60px;
+        height: 60px;
+        font-size: 1.5rem;
+    }
+
+    .result-section .download-list {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ==================== 动画效果 ==================== */
+.fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.slide-up {
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ==================== 工具提示样式 ==================== */
+.tooltip-custom {
+    position: relative;
+}
+
+.tooltip-custom::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.5rem 0.75rem;
+    background-color: #333;
+    color: white;
+    font-size: 0.75rem;
+    border-radius: 0.25rem;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: all var(--transition-fast);
+}
+
+.tooltip-custom:hover::after {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* ==================== 加载状态 ==================== */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.loading-spinner {
+    width: 3rem;
+    height: 3rem;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}

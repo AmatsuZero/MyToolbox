@@ -92,6 +92,31 @@ class CLIInterface:
             help="启用语音训练模式：使用 Mimic3 训练自定义语音模型",
         )
 
+        # GUI 模式参数
+        gui_group = parser.add_argument_group("GUI 模式参数")
+        gui_group.add_argument(
+            "--gui",
+            action="store_true",
+            help="启动 Web GUI 界面（可与 --whisper 或 --train 组合使用跳转到对应页面）",
+        )
+        gui_group.add_argument(
+            "--port",
+            type=int,
+            default=5000,
+            help="Web 服务端口（默认：5000）",
+        )
+        gui_group.add_argument(
+            "--host",
+            type=str,
+            default="127.0.0.1",
+            help="Web 服务绑定地址（默认：127.0.0.1，使用 0.0.0.0 允许外部访问）",
+        )
+        gui_group.add_argument(
+            "--no-browser",
+            action="store_true",
+            help="启动 Web 服务时不自动打开浏览器",
+        )
+
         # 输入参数（Whisper模式）
         input_group = parser.add_argument_group("Whisper 模式 - 输入参数")
         input_group.add_argument(
@@ -275,9 +300,18 @@ class CLIInterface:
         """验证参数有效性"""
         is_valid = True
 
+        # GUI 模式可以单独使用或与其他模式组合
+        if args.gui:
+            # GUI 模式参数验证
+            if args.port < 1 or args.port > 65535:
+                self.logger.error("端口号必须在 1-65535 之间")
+                return False
+            # GUI 模式下不需要其他验证，直接返回
+            return True
+
         # 检查是否选择了模式
         if not args.whisper and not args.train:
-            self.logger.error("必须选择一种操作模式：--whisper 或 --train")
+            self.logger.error("必须选择一种操作模式：--whisper 或 --train 或 --gui")
             self.logger.info("使用 --help 查看帮助信息")
             return False
 
@@ -738,6 +772,42 @@ class CLIInterface:
         else:
             return self._process_files(args, config)
 
+    def _run_gui_mode(self, args: argparse.Namespace) -> int:
+        """运行 Web GUI 模式"""
+        self.logger.info("启动 Web GUI 模式")
+        
+        try:
+            from web import create_app
+            from web.app import run_app
+        except ImportError as e:
+            self.logger.error("Web GUI 模块未安装，请安装可选依赖: pip install '.[gui]'")
+            self.logger.error("详细错误: %s", str(e))
+            return 1
+        
+        # 确定初始页面路由
+        if args.whisper:
+            initial_route = '/whisper'
+        elif args.train:
+            initial_route = '/train'
+        else:
+            initial_route = '/'
+        
+        # 创建并启动 Flask 应用
+        app = create_app()
+        
+        try:
+            run_app(
+                app=app,
+                host=args.host,
+                port=args.port,
+                open_browser=not args.no_browser,
+                initial_route=initial_route
+            )
+            return 0
+        except Exception as e:
+            self.logger.error("Web 服务启动失败: %s", str(e))
+            return 1
+
     def _run_train_mode(self, args: argparse.Namespace) -> int:
         """运行 Mimic3 语音训练模式"""
         self.logger.info("启动 Mimic3 语音训练模式")
@@ -805,7 +875,9 @@ class CLIInterface:
             self.error_handler.start_performance_monitoring()
 
             # 根据模式分发处理
-            if parsed_args.whisper:
+            if parsed_args.gui:
+                exit_code = self._run_gui_mode(parsed_args)
+            elif parsed_args.whisper:
                 exit_code = self._run_whisper_mode(parsed_args)
             elif parsed_args.train:
                 exit_code = self._run_train_mode(parsed_args)

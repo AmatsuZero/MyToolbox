@@ -820,7 +820,7 @@ def print_usage_info():
 语音处理工具 - 使用说明
 ========================
 
-本工具支持两种操作模式：
+本工具支持以下操作模式：
 
 1. 字幕提取模式 (--whisper)
    从音视频文件中提取语音并生成字幕文件
@@ -834,7 +834,18 @@ def print_usage_info():
    示例:
    python main.py --train --train-input data/ --train-output models/ --train-speaker-name my_voice
 
-3. 交互模式 (无参数)
+3. Web GUI 模式 (--gui)
+   启动 Web 图形界面，提供直观的操作体验
+   
+   示例:
+   python main.py --gui                    # 打开主页面
+   python main.py --whisper --gui          # 直接打开字幕提取页面
+   python main.py --train --gui            # 直接打开语音训练页面
+   python main.py --gui --port 8080        # 指定端口启动
+   python main.py --gui --host 0.0.0.0     # 允许外部访问
+   python main.py --gui --no-browser       # 不自动打开浏览器
+
+4. 交互模式 (无参数)
    直接运行 python main.py 进入交互式字幕提取模式
 
 使用 --help 查看完整参数说明:
@@ -844,9 +855,10 @@ def print_usage_info():
 
 def main():
     """主函数
-    
+
     根据命令行参数决定运行模式：
-    - 带参数时：使用命令行接口（支持 --whisper 和 --train 模式）
+    - 带 --gui 参数时：启动 Web GUI 界面
+    - 带 --whisper 或 --train 参数时：使用命令行接口
     - 无参数时：进入交互式模式（默认 Whisper 字幕提取）
     """
 
@@ -857,16 +869,16 @@ def main():
             # 直接传递给 CLI 处理
             cli = CLIInterface()
             return cli.run(sys.argv[1:])
-        
-        # 检查是否指定了有效的模式参数
-        has_mode = any(arg in sys.argv for arg in ['--whisper', '--train'])
-        
+
+        # 检查是否指定了有效的模式参数（包括 --gui）
+        has_mode = any(arg in sys.argv for arg in ['--whisper', '--train', '--gui'])
+
         if not has_mode:
             # 没有指定模式，显示帮助信息
-            print("错误: 必须指定操作模式 --whisper 或 --train")
+            print("错误: 必须指定操作模式 --whisper 或 --train 或 --gui")
             print_usage_info()
             return 1
-        
+
         # 使用命令行接口处理
         cli = CLIInterface()
         return cli.run(sys.argv[1:])

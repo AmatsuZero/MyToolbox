@@ -1,0 +1,230 @@
+<!-- 占位：训练页面模板将在任务 10 中实现 -->
+{% extends "base.html" %}
+
+{% block title %}语音训练 - MyToolbox{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- 左侧：上传和参数配置 -->
+    <div class="col-lg-5 mb-4">
+        <!-- 训练数据上传区域 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-upload me-2"></i>训练数据
+                </h5>
+            </div>
+            <div class="card-body">
+                <!-- 音频文件上传 -->
+                <div class="mb-4">
+                    <label class="form-label fw-bold">音频文件</label>
+                    <div class="upload-zone upload-zone-sm" id="audioUploadZone">
+                        <input type="file" id="audioFileInput" accept=".mp3,.wav,.flac,.aac,.ogg,.m4a,.wma" multiple>
+                        <i class="bi bi-file-earmark-music upload-icon" style="font-size: 2rem;"></i>
+                        <p class="mb-0 mt-2">拖拽或点击上传音频文件</p>
+                        <p class="text-muted small mb-0">支持 MP3、WAV、FLAC 等格式</p>
+                    </div>
+                    <div id="audioFileList" class="mt-2" style="display: none;">
+                        <div id="audioFileListContent"></div>
+                    </div>
+                </div>
+
+                <!-- 字幕文件上传 -->
+                <div>
+                    <label class="form-label fw-bold">字幕/文本文件（可选）</label>
+                    <div class="upload-zone upload-zone-sm" id="subtitleUploadZone">
+                        <input type="file" id="subtitleFileInput" accept=".srt,.vtt,.txt" multiple>
+                        <i class="bi bi-file-earmark-text upload-icon" style="font-size: 2rem;"></i>
+                        <p class="mb-0 mt-2">拖拽或点击上传字幕文件</p>
+                        <p class="text-muted small mb-0">支持 SRT、VTT、TXT 格式</p>
+                    </div>
+                    <div id="subtitleFileList" class="mt-2" style="display: none;">
+                        <div id="subtitleFileListContent"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 训练参数配置 -->
+        <div class="card config-panel">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-sliders me-2"></i>训练参数
+                </h5>
+            </div>
+            <div class="card-body">
+                <!-- 说话人名称 -->
+                <div class="mb-3">
+                    <label for="speakerName" class="form-label">说话人名称</label>
+                    <input type="text" class="form-control" id="speakerName"
+                           placeholder="例如: my_voice" value="custom_voice">
+                    <div class="form-text">用于标识训练后的语音模型</div>
+                </div>
+
+                <!-- 训练轮数 -->
+                <div class="mb-3">
+                    <label for="epochsInput" class="form-label">训练轮数 (Epochs)</label>
+                    <input type="number" class="form-control" id="epochsInput"
+                           min="1" max="1000" value="100">
+                    <div class="form-text">建议 50-200 轮，更多轮数可能带来更好效果</div>
+                </div>
+
+                <!-- 批处理大小 -->
+                <div class="mb-3">
+                    <label for="batchSizeInput" class="form-label">批处理大小</label>
+                    <select class="form-select" id="batchSizeInput">
+                        <option value="8">8 - 内存较小时使用</option>
+                        <option value="16">16 - 推荐配置</option>
+                        <option value="32" selected>32 - 默认值</option>
+                        <option value="64">64 - 高性能配置</option>
+                    </select>
+                    <div class="form-text">较大的批处理大小需要更多显存</div>
+                </div>
+
+                <!-- 采样率 -->
+                <div class="mb-3">
+                    <label for="sampleRateSelect" class="form-label">音频采样率</label>
+                    <select class="form-select" id="sampleRateSelect">
+                        <option value="16000">16000 Hz</option>
+                        <option value="22050" selected>22050 Hz - 推荐</option>
+                        <option value="44100">44100 Hz</option>
+                        <option value="48000">48000 Hz</option>
+                    </select>
+                </div>
+
+                <!-- 开始训练按钮 -->
+                <button type="button" class="btn btn-success w-100" id="startTrainBtn" disabled>
+                    <i class="bi bi-play-fill me-2"></i>开始训练
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧：进度和结果 -->
+    <div class="col-lg-7">
+        <!-- 训练进度区域 -->
+        <div class="card mb-4" id="trainProgressCard" style="display: none;">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-activity me-2"></i>训练进度
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <div class="border rounded p-3 text-center">
+                            <div class="text-muted small">当前轮次</div>
+                            <div class="fs-4 fw-bold text-primary" id="currentEpoch">0/100</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="border rounded p-3 text-center">
+                            <div class="text-muted small">当前损失值</div>
+                            <div class="fs-4 fw-bold text-warning" id="currentLoss">-</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="border rounded p-3 text-center">
+                            <div class="text-muted small">状态</div>
+                            <div class="fs-4 fw-bold text-info" id="trainStatus">准备中</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between mb-2">
+                    <span id="trainStage">初始化...</span>
+                    <span id="trainPercent">0%</span>
+                </div>
+                <div class="progress mb-3">
+                    <div class="progress-bar bg-success progress-bar-striped progress-bar-animated"
+                         id="trainProgressBar"
+                         role="progressbar"
+                         style="width: 0%">
+                    </div>
+                </div>
+                <p class="text-muted mb-0" id="trainMessage">正在准备训练环境...</p>
+
+                <!-- 停止训练按钮 -->
+                <button type="button" class="btn btn-outline-danger mt-3" id="stopTrainBtn">
+                    <i class="bi bi-stop-fill me-2"></i>停止训练
+                </button>
+            </div>
+        </div>
+
+        <!-- 训练结果区域 -->
+        <div class="card result-section" id="trainResultCard" style="display: none;">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-trophy text-warning me-2"></i>训练结果
+                    </h5>
+                    <span class="status-indicator completed">
+                        <i class="bi bi-check-circle-fill"></i> 完成
+                    </span>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- 结果摘要 -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <div class="border rounded p-3">
+                            <div class="text-muted small">说话人名称</div>
+                            <div class="fw-bold" id="resultSpeaker">-</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="border rounded p-3">
+                            <div class="text-muted small">训练轮数</div>
+                            <div class="fw-bold" id="resultEpochs">-</div>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <div class="border rounded p-3">
+                            <div class="text-muted small">模型输出目录</div>
+                            <div class="fw-bold text-break" id="resultOutputDir">-</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 下载模型 -->
+                <h6 class="mb-3">下载模型文件</h6>
+                <div class="download-list" id="trainDownloadList">
+                    <!-- 动态生成下载链接 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 任务列表 -->
+        <div class="card" id="trainTaskListCard">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-list-task me-2"></i>训练历史
+                </h5>
+                <button class="btn btn-sm btn-outline-secondary" id="refreshTrainTasksBtn">
+                    <i class="bi bi-arrow-clockwise"></i>
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="trainTaskListContent">
+                    <p class="text-muted text-center mb-0">暂无训练任务</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.upload-zone-sm {
+    padding: 1.5rem;
+}
+.upload-zone-sm .upload-icon {
+    font-size: 2rem !important;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/train.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+
+{% block title %}MyToolbox - 语音处理工具{% endblock %}
+
+{% block content %}
+<!-- 欢迎区域 -->
+<div class="text-center mb-5">
+    <h1 class="display-5 fw-bold mb-3">
+        <i class="bi bi-soundwave text-primary me-2"></i>
+        MyToolbox
+    </h1>
+    <p class="lead text-muted">
+        强大的语音处理工具，支持字幕提取和语音模型训练
+    </p>
+</div>
+
+<!-- 功能卡片区域 -->
+<div class="row g-4 justify-content-center">
+    <!-- 字幕提取卡片 -->
+    <div class="col-md-6 col-lg-5">
+        <a href="{{ url_for('main.whisper_page') }}" class="card card-feature h-100 text-center p-4">
+            <div class="card-body">
+                <div class="card-icon bg-primary bg-opacity-10 text-primary mx-auto">
+                    <i class="bi bi-file-earmark-text"></i>
+                </div>
+                <h3 class="card-title h4 mb-3">字幕提取</h3>
+                <p class="card-text text-muted">
+                    使用 OpenAI Whisper 从音视频文件中自动提取字幕，
+                    支持多种语言和输出格式
+                </p>
+                <ul class="list-unstyled text-start mt-4 small">
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success me-2"></i>
+                        支持 MP4、MKV、MP3、WAV 等多种格式
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success me-2"></i>
+                        自动检测语言或手动指定
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success me-2"></i>
+                        输出 SRT、VTT、TXT、JSON 等格式
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success me-2"></i>
+                        5种模型大小可选，平衡速度与精度
+                    </li>
+                </ul>
+                <div class="mt-4">
+                    <span class="btn btn-primary">
+                        开始使用 <i class="bi bi-arrow-right ms-1"></i>
+                    </span>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- 语音训练卡片 -->
+    <div class="col-md-6 col-lg-5">
+        <a href="{{ url_for('main.train_page') }}" class="card card-feature h-100 text-center p-4">
+            <div class="card-body">
+                <div class="card-icon bg-success bg-opacity-10 text-success mx-auto">
+                    <i class="bi bi-mic"></i>
+                </div>
+                <h3 class="card-title h4 mb-3">语音训练</h3>
+                <p class="card-text text-muted">
+                    使用 Mimic3 TTS 框架训练自定义语音模型，
+                    创建专属的语音合成角色
+                </p>
+                <ul class="list-unstyled text-start mt-4 small">
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success me-2"></i>
+                        上传音频和对应文本进行训练
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success me-2"></i>
+                        可配置训练轮数和批处理大小
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success me-2"></i>
+                        实时查看训练进度和损失值
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success me-2"></i>
+                        训练完成后导出模型文件
+                    </li>
+                </ul>
+                <div class="mt-4">
+                    <span class="btn btn-success">
+                        开始使用 <i class="bi bi-arrow-right ms-1"></i>
+                    </span>
+                </div>
+            </div>
+        </a>
+    </div>
+</div>
+
+<!-- 使用说明区域 -->
+<div class="row mt-5">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title mb-4">
+                    <i class="bi bi-lightbulb text-warning me-2"></i>
+                    快速入门
+                </h5>
+                <div class="row g-4">
+                    <div class="col-md-4">
+                        <div class="d-flex">
+                            <div class="flex-shrink-0">
+                                <span class="badge bg-primary rounded-circle p-2">1</span>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <h6 class="mb-1">选择功能</h6>
+                                <p class="text-muted small mb-0">
+                                    点击上方卡片进入字幕提取或语音训练页面
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-flex">
+                            <div class="flex-shrink-0">
+                                <span class="badge bg-primary rounded-circle p-2">2</span>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <h6 class="mb-1">上传文件</h6>
+                                <p class="text-muted small mb-0">
+                                    拖拽或点击上传您的音视频文件
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-flex">
+                            <div class="flex-shrink-0">
+                                <span class="badge bg-primary rounded-circle p-2">3</span>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <h6 class="mb-1">获取结果</h6>
+                                <p class="text-muted small mb-0">
+                                    等待处理完成后下载您的文件
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 命令行提示 -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="alert alert-info d-flex align-items-center" role="alert">
+            <i class="bi bi-terminal me-3 fs-4"></i>
+            <div>
+                <strong>命令行用户？</strong>
+                您也可以通过命令行使用本工具：
+                <code class="ms-2">python main.py --whisper --input path</code>
+                或
+                <code class="ms-2">python main.py --train --train-input path</code>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
