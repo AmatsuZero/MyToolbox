@@ -19,7 +19,7 @@ from typing import List, Dict, Optional
 from dataclasses import dataclass
 import shutil
 
-from file_scanner import MediaFile
+from core.utils.file_scanner import MediaFile
 
 
 @dataclass

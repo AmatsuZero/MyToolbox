@@ -26,7 +26,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 import psutil
 
-from config_error_handler import ErrorHandlerConfig
+from core.config.config_error_handler import ErrorHandlerConfig
 
 
 class ErrorLevel(Enum):

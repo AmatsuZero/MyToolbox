@@ -15,6 +15,10 @@
 - 错误处理和日志记录
 - 生成处理摘要报告
 
+新增功能：
+- 双模式支持：Whisper 字幕提取模式 和 Mimic3 语音训练模式
+- 通过 --whisper 和 --train 参数切换模式
+
 Classes:
     CLIInterface: 命令行接口类，处理参数解析、文件处理和结果输出
 """
@@ -30,12 +34,12 @@ from typing import Dict, List, Optional
 
 import yaml
 
-from error_handler import ErrorHandler
-from file_scanner import MediaFile, MediaFileScanner
-from format_converter import FormatConverter
-from subtitle_generator import SubtitleGenerator
-from whisper_config import WhisperConfigManager
-from whisper_integration import WhisperIntegration, create_model_config
+from core.utils.error_handler import ErrorHandler
+from core.utils.file_scanner import MediaFile, MediaFileScanner
+from core.utils.format_converter import FormatConverter
+from modules.whisper.subtitle_generator import SubtitleGenerator
+from core.config.whisper_config import WhisperConfigManager
+from modules.whisper.whisper_integration import WhisperIntegration, create_model_config
 
 
 class CLIInterface:
@@ -66,15 +70,32 @@ class CLIInterface:
         """设置命令行参数解析器"""
 
         parser = argparse.ArgumentParser(
-            description="语音转文字工具 - 支持多种音视频格式的语音识别和字幕生成",
-            epilog="示例: python cli_interface.py --input downloads/ --model medium "
-            "--language zh --output subtitles/",
+            description="语音处理工具 - 支持字幕提取（Whisper）和语音模型训练（Mimic3）两种模式",
+            epilog="""示例:
+  字幕提取模式: python cli_interface.py --whisper --input downloads/ --model medium --language zh --output subtitles/
+  训练模式: python cli_interface.py --train --train-input data/ --train-output models/ --train-speaker-name my_voice
+            """,
+            formatter_class=argparse.RawDescriptionHelpFormatter,
         )
 
-        # 输入参数
-        input_group = parser.add_argument_group("输入参数")
+        # 模式选择参数（互斥）
+        mode_group = parser.add_argument_group("模式选择（必选其一）")
+        mode_exclusive = mode_group.add_mutually_exclusive_group()
+        mode_exclusive.add_argument(
+            "--whisper",
+            action="store_true",
+            help="启用字幕提取模式：使用 Whisper 从音视频文件中提取字幕",
+        )
+        mode_exclusive.add_argument(
+            "--train",
+            action="store_true",
+            help="启用语音训练模式：使用 Mimic3 训练自定义语音模型",
+        )
+
+        # 输入参数（Whisper模式）
+        input_group = parser.add_argument_group("Whisper 模式 - 输入参数")
         input_group.add_argument(
-            "-i", "--input", type=str, required=True, help="输入文件或目录路径"
+            "-i", "--input", type=str, help="输入文件或目录路径"
         )
         input_group.add_argument(
             "--recursive", action="store_true", help="递归扫描子目录"
@@ -86,8 +107,8 @@ class CLIInterface:
             help="文件匹配模式（例如：*.mp4,*.wav）",
         )
 
-        # 模型参数
-        model_group = parser.add_argument_group("模型参数")
+        # 模型参数（Whisper模式）
+        model_group = parser.add_argument_group("Whisper 模式 - 模型参数")
         model_group.add_argument(
             "-m",
             "--model",
@@ -125,8 +146,8 @@ class CLIInterface:
             help="量化类型（默认：default）",
         )
 
-        # 输出参数
-        output_group = parser.add_argument_group("输出参数")
+        # 输出参数（Whisper模式）
+        output_group = parser.add_argument_group("Whisper 模式 - 输出参数")
         output_group.add_argument(
             "-o",
             "--output",
@@ -145,8 +166,8 @@ class CLIInterface:
             "--encoding", type=str, default="utf-8", help="输出文件编码（默认：utf-8）"
         )
 
-        # 处理参数
-        processing_group = parser.add_argument_group("处理参数")
+        # 处理参数（Whisper模式）
+        processing_group = parser.add_argument_group("Whisper 模式 - 处理参数")
         processing_group.add_argument(
             "--batch-size", type=int, default=1, help="批处理大小（默认：1）"
         )
@@ -166,7 +187,60 @@ class CLIInterface:
             "--best-of", type=int, default=5, help="最佳结果数量（默认：5）"
         )
 
-        # 性能参数
+        # 训练模式参数
+        train_group = parser.add_argument_group("Train 模式 - 训练参数")
+        train_group.add_argument(
+            "--train-input",
+            type=str,
+            help="训练数据输入目录，包含视频、音频或字幕文件",
+        )
+        train_group.add_argument(
+            "--train-audio",
+            type=str,
+            help="指定单个音频文件作为训练音频",
+        )
+        train_group.add_argument(
+            "--train-subtitle",
+            type=str,
+            help="指定单个字幕文件作为训练文本",
+        )
+        train_group.add_argument(
+            "--train-output",
+            type=str,
+            default="trained_models",
+            help="训练模型输出目录（默认：trained_models）",
+        )
+        train_group.add_argument(
+            "--train-epochs",
+            type=int,
+            default=100,
+            help="训练轮数（默认：100）",
+        )
+        train_group.add_argument(
+            "--train-batch-size",
+            type=int,
+            default=32,
+            help="训练批处理大小（默认：32）",
+        )
+        train_group.add_argument(
+            "--train-sample-rate",
+            type=int,
+            default=22050,
+            help="音频采样率（默认：22050）",
+        )
+        train_group.add_argument(
+            "--train-speaker-name",
+            type=str,
+            default="custom_voice",
+            help="说话人名称标识（默认：custom_voice）",
+        )
+        train_group.add_argument(
+            "--train-config",
+            type=str,
+            help="训练配置文件路径（JSON/YAML格式）",
+        )
+
+        # 性能参数（通用）
         performance_group = parser.add_argument_group("性能参数")
         performance_group.add_argument(
             "--optimize-memory", action="store_true", help="启用内存优化"
@@ -181,7 +255,7 @@ class CLIInterface:
             "--timeout", type=int, default=3600, help="处理超时时间（秒，默认：3600）"
         )
 
-        # 配置参数
+        # 配置参数（通用）
         config_group = parser.add_argument_group("配置参数")
         config_group.add_argument("--config", type=str, help="配置文件路径")
         config_group.add_argument("--save-config", type=str, help="保存配置到文件")
@@ -201,7 +275,31 @@ class CLIInterface:
         """验证参数有效性"""
         is_valid = True
 
-        # 检查输入路径
+        # 检查是否选择了模式
+        if not args.whisper and not args.train:
+            self.logger.error("必须选择一种操作模式：--whisper 或 --train")
+            self.logger.info("使用 --help 查看帮助信息")
+            return False
+
+        # Whisper 模式验证
+        if args.whisper:
+            is_valid = self._validate_whisper_args(args)
+
+        # Train 模式验证
+        if args.train:
+            is_valid = self._validate_train_args(args)
+
+        return is_valid
+
+    def _validate_whisper_args(self, args: argparse.Namespace) -> bool:
+        """验证 Whisper 模式参数"""
+        is_valid = True
+
+        # 检查输入路径（Whisper模式必须）
+        if not args.input:
+            self.logger.error("Whisper 模式需要指定输入路径：--input")
+            return False
+
         input_path = Path(args.input)
         if not input_path.exists():
             self.logger.error("输入路径不存在: %s", args.input)
@@ -239,6 +337,73 @@ class CLIInterface:
             is_valid = False
 
         return is_valid
+
+    def _validate_train_args(self, args: argparse.Namespace) -> bool:
+        """验证 Train 模式参数"""
+        is_valid = True
+
+        # 检查训练数据输入
+        has_input = args.train_input or args.train_audio
+
+        if not has_input:
+            self.logger.error("Train 模式需要指定训练数据：--train-input 或 --train-audio")
+            return False
+
+        # 检查训练输入目录
+        if args.train_input:
+            train_input_path = Path(args.train_input)
+            if not train_input_path.exists():
+                self.logger.error("训练数据目录不存在: %s", args.train_input)
+                is_valid = False
+
+        # 检查单个音频文件
+        if args.train_audio:
+            train_audio_path = Path(args.train_audio)
+            if not train_audio_path.exists():
+                self.logger.error("训练音频文件不存在: %s", args.train_audio)
+                is_valid = False
+
+        # 检查单个字幕文件
+        if args.train_subtitle:
+            train_subtitle_path = Path(args.train_subtitle)
+            if not train_subtitle_path.exists():
+                self.logger.error("训练字幕文件不存在: %s", args.train_subtitle)
+                is_valid = False
+
+        # 检查训练输出目录
+        if is_valid:
+            train_output_path = Path(args.train_output)
+            if not train_output_path.exists():
+                try:
+                    train_output_path.mkdir(parents=True, exist_ok=True)
+                    self.logger.info("创建训练输出目录: %s", train_output_path)
+                except (IOError, OSError, PermissionError) as e:
+                    self.logger.error("无法创建训练输出目录: %s", str(e))
+                    is_valid = False
+
+        # 验证训练参数范围
+        if is_valid and args.train_epochs < 1:
+            self.logger.error("训练轮数必须大于0")
+            is_valid = False
+
+        if is_valid and args.train_batch_size < 1:
+            self.logger.error("训练批处理大小必须大于0")
+            is_valid = False
+
+        if is_valid and args.train_sample_rate < 8000:
+            self.logger.error("采样率不能低于8000")
+            is_valid = False
+
+        # 检查训练配置文件
+        if is_valid and args.train_config:
+            config_path = Path(args.train_config)
+            if not config_path.exists():
+                self.logger.error("训练配置文件不存在: %s", args.train_config)
+                is_valid = False
+
+        return is_valid
+
+    # ... existing code ...
 
     def load_config(self, config_path: Path) -> Optional[Dict]:
         """加载配置文件"""
@@ -466,7 +631,7 @@ class CLIInterface:
         return 0
 
     def _process_files(self, args: argparse.Namespace, config: Dict) -> int:
-        """处理文件的主要逻辑"""
+        """处理文件的主要逻辑（Whisper模式）"""
         # 扫描文件
         media_files = self.scan_files(args)
         if not media_files:
@@ -560,6 +725,67 @@ class CLIInterface:
 
         return results
 
+    def _run_whisper_mode(self, args: argparse.Namespace) -> int:
+        """运行 Whisper 字幕提取模式"""
+        self.logger.info("启动 Whisper 字幕提取模式")
+        
+        # 加载配置
+        config = self._load_configuration(args)
+        
+        # 处理逻辑
+        if args.dry_run:
+            return self._handle_dry_run(args)
+        else:
+            return self._process_files(args, config)
+
+    def _run_train_mode(self, args: argparse.Namespace) -> int:
+        """运行 Mimic3 语音训练模式"""
+        self.logger.info("启动 Mimic3 语音训练模式")
+        
+        # 导入训练控制器和配置（延迟导入以避免循环依赖）
+        try:
+            from modules.training.train_controller import TrainController
+            from modules.training.train_config import TrainConfig
+        except ImportError as e:
+            self.logger.error("训练模块未安装，请确保 train_controller.py 和 train_config.py 存在: %s", str(e))
+            return 1
+        
+        # 将命令行参数转换为 TrainConfig 对象
+        train_config = TrainConfig(
+            input_dir=Path(args.train_input) if args.train_input else None,
+            output_path=Path(args.train_output),
+            speaker_name=args.train_speaker_name,
+            epochs=args.train_epochs,
+            batch_size=args.train_batch_size,
+            sample_rate=args.train_sample_rate,
+            verbose=args.verbose,
+        )
+        
+        # 如果指定了单个音频和字幕文件
+        if args.train_audio:
+            train_config.audio_files = [Path(args.train_audio)]
+        if args.train_subtitle:
+            train_config.subtitle_files = [Path(args.train_subtitle)]
+        
+        # 加载额外的训练配置文件（如果提供）
+        if args.train_config:
+            try:
+                loaded_config = TrainConfig.load(Path(args.train_config))
+                # 合并配置（命令行参数优先）
+                if loaded_config:
+                    if not train_config.input_dir and loaded_config.input_dir:
+                        train_config.input_dir = loaded_config.input_dir
+                    # 其他配置项可以从文件中继承
+            except Exception as e:
+                self.logger.warning("加载训练配置文件失败: %s", str(e))
+        
+        # 创建训练控制器并运行
+        controller = TrainController(train_config, verbose=args.verbose)
+        result = controller.run()
+        
+        # 返回退出码
+        return 0 if result.success else 1
+
     def run(self, args: Optional[List[str]] = None) -> int:
         """运行命令行接口"""
         exit_code = 0
@@ -575,17 +801,18 @@ class CLIInterface:
             # 设置日志级别
             self._configure_logging(parsed_args)
 
-            # 加载配置
-            config = self._load_configuration(parsed_args)
-
             # 开始性能监控
             self.error_handler.start_performance_monitoring()
 
-            # 处理逻辑
-            if parsed_args.dry_run:
-                exit_code = self._handle_dry_run(parsed_args)
+            # 根据模式分发处理
+            if parsed_args.whisper:
+                exit_code = self._run_whisper_mode(parsed_args)
+            elif parsed_args.train:
+                exit_code = self._run_train_mode(parsed_args)
             else:
-                exit_code = self._process_files(parsed_args, config)
+                # 不应该到达这里，因为验证已经检查过
+                self.logger.error("未选择操作模式")
+                exit_code = 1
 
         except KeyboardInterrupt:
             self.logger.info("处理被用户中断")

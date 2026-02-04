@@ -21,8 +21,8 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, TextIO, Union
 
-from subtitle_models import SubtitleSegment, SubtitleStyle
-from subtitle_parsers import SubtitleParser
+from models.subtitle_models import SubtitleSegment, SubtitleStyle
+from modules.subtitle_parsers import SubtitleParser
 
 
 

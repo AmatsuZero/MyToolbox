@@ -11,4 +11,5 @@ dependencies = [
     "torch",
     "torchaudio",
     "PyYAML",
+    "mycroft-mimic3-tts>=0.2.4",
 ]

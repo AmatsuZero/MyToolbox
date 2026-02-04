@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from subtitle_models import SubtitleSegment
+from models.subtitle_models import SubtitleSegment
 
 
 class SubtitleParser:

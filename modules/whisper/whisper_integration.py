@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union, cast
 
-from format_converter import FormatConverter
+from core.utils.format_converter import FormatConverter
 from whisper_engines import EngineSelector
 from whisper_engines.base_engine import EngineOptions, WhisperEngine
 from whisper_engines.engine_registry import EngineRegistry

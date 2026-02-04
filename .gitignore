@@ -109,3 +109,5 @@ converted_audio/
 subtitles/
 error_log.*.json
 idea/
+test/
+trained_models/

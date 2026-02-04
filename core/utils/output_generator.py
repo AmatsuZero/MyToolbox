@@ -18,7 +18,7 @@ from typing import Dict, List, Optional
 from dataclasses import dataclass
 import logging
 
-from whisper_integration import TranscriptionResult
+from modules.whisper.whisper_integration import TranscriptionResult
 
 
 @dataclass

@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 """
-语音转文字工具 - 主程序入口模块
+语音处理工具 - 主程序入口模块
 
-该模块是整个语音转文字系统的核心入口，协调各个组件的工作流程。
-基于 OpenAI Whisper 的语音识别系统，支持多种音视频格式和字幕生成。
+该模块是整个语音处理系统的核心入口，支持两种操作模式：
+1. Whisper 字幕提取模式：从音视频文件中提取字幕
+2. Mimic3 语音训练模式：训练自定义语音模型
+
+基于 OpenAI Whisper 的语音识别系统和 Mimic3 TTS 训练框架。
+
 主要功能包括：
 - 系统组件的初始化和资源管理
 - 媒体文件的扫描和过滤
 - 音视频文件的预处理和格式转换
 - 使用Whisper模型进行语音识别
 - 生成多种格式的字幕文件
+- 使用Mimic3训练自定义语音模型
 - 批量处理多个文件
 - 生成处理摘要报告
 - 错误处理和性能监控
@@ -17,6 +22,11 @@
 
 Classes:
     SpeechToTextSystem: 语音转文字系统的主类，协调各组件工作
+
+Usage:
+    字幕提取模式: python main.py --whisper --input <path> --output <path>
+    训练模式: python main.py --train --train-input <path> --train-output <path>
+    交互模式: python main.py (无参数)
 """
 
 import sys
@@ -28,13 +38,13 @@ import json
 import torch
 
 # 导入自定义模块
-from file_scanner import MediaFileScanner, MediaFile
-from format_converter import FormatConverter
-from whisper_integration import WhisperIntegration, TranscriptionResult, ModelConfig
-from subtitle_generator import SubtitleGenerator
-from error_handler import ErrorHandler, ErrorLevel, ErrorContext
-from config import ConfigManager, ProjectConfig
-from cli_interface import CLIInterface
+from core.utils.file_scanner import MediaFileScanner, MediaFile
+from core.utils.format_converter import FormatConverter
+from modules.whisper.whisper_integration import WhisperIntegration, TranscriptionResult, ModelConfig
+from modules.whisper.subtitle_generator import SubtitleGenerator
+from core.utils.error_handler import ErrorHandler, ErrorLevel, ErrorContext
+from core.config.config import ConfigManager, ProjectConfig
+from core.cli.cli_interface import CLIInterface
 
 
 class SpeechToTextSystem:
@@ -804,18 +814,68 @@ class SpeechToTextSystem:
             self.cleanup()
 
 
+def print_usage_info():
+    """打印使用帮助信息"""
+    print("""
+语音处理工具 - 使用说明
+========================
+
+本工具支持两种操作模式：
+
+1. 字幕提取模式 (--whisper)
+   从音视频文件中提取语音并生成字幕文件
+   
+   示例:
+   python main.py --whisper --input downloads/ --model medium --language zh --output subtitles/
+
+2. 语音训练模式 (--train)
+   使用音频和字幕数据训练自定义 Mimic3 语音模型
+   
+   示例:
+   python main.py --train --train-input data/ --train-output models/ --train-speaker-name my_voice
+
+3. 交互模式 (无参数)
+   直接运行 python main.py 进入交互式字幕提取模式
+
+使用 --help 查看完整参数说明:
+   python main.py --help
+""")
+
+
 def main():
-    """主函数"""
+    """主函数
+    
+    根据命令行参数决定运行模式：
+    - 带参数时：使用命令行接口（支持 --whisper 和 --train 模式）
+    - 无参数时：进入交互式模式（默认 Whisper 字幕提取）
+    """
 
     # 检查命令行参数
     if len(sys.argv) > 1:
-        # 使用命令行接口
+        # 检查是否请求帮助但没有指定模式
+        if sys.argv[1] in ['-h', '--help']:
+            # 直接传递给 CLI 处理
+            cli = CLIInterface()
+            return cli.run(sys.argv[1:])
+        
+        # 检查是否指定了有效的模式参数
+        has_mode = any(arg in sys.argv for arg in ['--whisper', '--train'])
+        
+        if not has_mode:
+            # 没有指定模式，显示帮助信息
+            print("错误: 必须指定操作模式 --whisper 或 --train")
+            print_usage_info()
+            return 1
+        
+        # 使用命令行接口处理
         cli = CLIInterface()
         return cli.run(sys.argv[1:])
 
-    # 交互式模式
-    print("语音转文字工具 - 交互式模式")
+    # 无参数时进入交互式模式
+    print("语音处理工具 - 交互式模式")
     print("=" * 50)
+    print("\n提示: 交互模式仅支持字幕提取功能。")
+    print("如需使用训练模式，请使用命令行参数: --train\n")
 
     try:
         # 加载配置

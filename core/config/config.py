@@ -20,10 +20,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import yaml
-from whisper_config import ModelConfig, BasicConfig
-from config_subtitle import SubtitleGeneratorConfig
-from config_error_handler import ErrorHandlerConfig
-from config_cli import CLIConfig
+from core.config.whisper_config import ModelConfig, BasicConfig
+from core.config.config_subtitle import SubtitleGeneratorConfig
+from core.config.config_error_handler import ErrorHandlerConfig
+from core.cli.config_cli import CLIConfig
 
 
 @dataclass
