@@ -24,3 +24,9 @@ def whisper_page():
 def train_page():
     """语音训练页面"""
     return render_template('train.html')
+
+
+@main_bp.route('/onnx-tts')
+def onnx_tts_page():
+    """ONNX TTS 语音合成页面"""
+    return render_template('onnx_tts.html')

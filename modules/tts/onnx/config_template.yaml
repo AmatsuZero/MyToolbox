@@ -1,0 +1,40 @@
+# ONNX TTS 模块配置文件示例
+
+# 文本处理配置
+text_processing:
+  max_length: 1000          # 最大文本长度
+  min_length: 1             # 最小文本长度
+  encoding: "utf-8"         # 文本编码
+  normalize_whitespace: true # 标准化空白字符
+  remove_special_chars: false # 移除特殊字符
+  
+  # 字符到ID的映射（可选）
+  # char_to_id:
+  #   "a": 1
+  #   "b": 2
+  #   ...
+  
+  # 音素转换器配置（可选）
+  # phoneme_converter:
+  #   "a": 10
+  #   "b": 11
+  #   ...
+
+# 音频处理配置
+audio_processing:
+  sample_rate: 22050        # 采样率（Hz）
+  bit_depth: 16             # 位深度
+  default_format: "wav"     # 默认输出格式
+
+# 模型配置
+model:
+  device: "auto"            # 运行设备：auto, cpu, cuda
+  
+  # 输入输出类型
+  input_format: "text"      # text, char_ids, phoneme_ids
+  output_type: "waveform"   # waveform, mel_spectrogram, linear_spectrogram
+
+# 性能配置
+performance:
+  enable_gpu: true          # 启用GPU加速
+  optimize_memory: false    # 内存优化模式

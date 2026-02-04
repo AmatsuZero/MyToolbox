@@ -834,18 +834,26 @@ def print_usage_info():
    示例:
    python main.py --train --train-input data/ --train-output models/ --train-speaker-name my_voice
 
-3. Web GUI 模式 (--gui)
+3. ONNX TTS 模式 (--onnx-tts)
+   使用 ONNX Runtime 进行文本到语音合成
+   
+   示例:
+   python main.py --onnx-tts --onnx-model model.onnx --onnx-text "要合成的文本"
+   python main.py --onnx-tts --gui         # 启动 ONNX TTS Web 界面
+
+4. Web GUI 模式 (--gui)
    启动 Web 图形界面，提供直观的操作体验
    
    示例:
    python main.py --gui                    # 打开主页面
    python main.py --whisper --gui          # 直接打开字幕提取页面
    python main.py --train --gui            # 直接打开语音训练页面
+   python main.py --onnx-tts --gui         # 直接打开 ONNX TTS 页面
    python main.py --gui --port 8080        # 指定端口启动
    python main.py --gui --host 0.0.0.0     # 允许外部访问
    python main.py --gui --no-browser       # 不自动打开浏览器
 
-4. 交互模式 (无参数)
+5. 交互模式 (无参数)
    直接运行 python main.py 进入交互式字幕提取模式
 
 使用 --help 查看完整参数说明:
@@ -871,11 +879,11 @@ def main():
             return cli.run(sys.argv[1:])
 
         # 检查是否指定了有效的模式参数（包括 --gui）
-        has_mode = any(arg in sys.argv for arg in ['--whisper', '--train', '--gui'])
+        has_mode = any(arg in sys.argv for arg in ['--whisper', '--train', '--onnx-tts', '--gui'])
 
         if not has_mode:
             # 没有指定模式，显示帮助信息
-            print("错误: 必须指定操作模式 --whisper 或 --train 或 --gui")
+            print("错误: 必须指定操作模式 --whisper 或 --train 或 --onnx-tts 或 --gui")
             print_usage_info()
             return 1
 

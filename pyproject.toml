@@ -21,6 +21,11 @@ gui = [
 tts = [
     "mycroft-mimic3-tts>=0.2.4",
 ]
+onnx = [
+    "onnxruntime>=1.16.0",
+    "numpy>=1.24.0",
+    "scipy>=1.11.0",
+]
 
 [tool.setuptools.packages.find]
 include = ["core*", "config*", "modules*", "web*", "whisper_engines*"]

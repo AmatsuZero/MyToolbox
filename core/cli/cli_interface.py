@@ -91,6 +91,11 @@ class CLIInterface:
             action="store_true",
             help="启用语音训练模式：使用 Mimic3 训练自定义语音模型",
         )
+        mode_exclusive.add_argument(
+            "--onnx-tts",
+            action="store_true",
+            help="启用ONNX TTS模式：使用ONNX模型进行文本到语音合成",
+        )
 
         # GUI 模式参数
         gui_group = parser.add_argument_group("GUI 模式参数")
@@ -265,6 +270,68 @@ class CLIInterface:
             help="训练配置文件路径（JSON/YAML格式）",
         )
 
+        # ONNX TTS模式参数
+        onnx_group = parser.add_argument_group("ONNX TTS 模式 - 参数")
+        onnx_group.add_argument(
+            "--onnx-model",
+            type=str,
+            help="ONNX模型文件路径（.onnx格式）",
+        )
+        onnx_group.add_argument(
+            "--text",
+            type=str,
+            help="待合成的文本内容",
+        )
+        onnx_group.add_argument(
+            "--text-file",
+            type=str,
+            help="包含待合成文本的文件路径",
+        )
+        onnx_group.add_argument(
+            "--onnx-output",
+            type=str,
+            help="输出音频文件路径（支持.wav和.mp3格式）",
+        )
+        onnx_group.add_argument(
+            "--onnx-format",
+            type=str,
+            choices=["wav", "mp3"],
+            default="wav",
+            help="输出音频格式（默认：wav）",
+        )
+        onnx_group.add_argument(
+            "--onnx-sample-rate",
+            type=int,
+            default=22050,
+            help="输出音频采样率（默认：22050）",
+        )
+        onnx_group.add_argument(
+            "--onnx-device",
+            type=str,
+            choices=["auto", "cpu", "cuda"],
+            default="auto",
+            help="推理设备（默认：auto）",
+        )
+        onnx_group.add_argument(
+            "--onnx-config",
+            type=str,
+            help="ONNX模型配置文件路径（JSON/YAML格式）",
+        )
+        onnx_group.add_argument(
+            "--input-format",
+            type=str,
+            choices=["text", "char_ids", "phoneme_ids"],
+            default="text",
+            help="输入格式类型（默认：text）",
+        )
+        onnx_group.add_argument(
+            "--output-type",
+            type=str,
+            choices=["waveform", "mel_spectrogram", "linear_spectrogram"],
+            default="waveform",
+            help="模型输出类型（默认：waveform）",
+        )
+
         # 性能参数（通用）
         performance_group = parser.add_argument_group("性能参数")
         performance_group.add_argument(
@@ -310,8 +377,8 @@ class CLIInterface:
             return True
 
         # 检查是否选择了模式
-        if not args.whisper and not args.train:
-            self.logger.error("必须选择一种操作模式：--whisper 或 --train 或 --gui")
+        if not args.whisper and not args.train and not args.onnx_tts:
+            self.logger.error("必须选择一种操作模式：--whisper 或 --train 或 --onnx-tts 或 --gui")
             self.logger.info("使用 --help 查看帮助信息")
             return False
 
@@ -322,6 +389,10 @@ class CLIInterface:
         # Train 模式验证
         if args.train:
             is_valid = self._validate_train_args(args)
+        
+        # ONNX TTS 模式验证
+        if args.onnx_tts:
+            is_valid = self._validate_onnx_tts_args(args)
 
         return is_valid
 
@@ -434,6 +505,61 @@ class CLIInterface:
             if not config_path.exists():
                 self.logger.error("训练配置文件不存在: %s", args.train_config)
                 is_valid = False
+
+        return is_valid
+
+    def _validate_onnx_tts_args(self, args: argparse.Namespace) -> bool:
+        """验证 ONNX TTS 模式参数"""
+        is_valid = True
+
+        # 检查ONNX模型文件
+        if not args.onnx_model:
+            self.logger.error("ONNX TTS 模式需要指定模型文件：--onnx-model")
+            return False
+
+        model_path = Path(args.onnx_model)
+        if not model_path.exists():
+            self.logger.error("ONNX模型文件不存在: %s", args.onnx_model)
+            is_valid = False
+        elif model_path.suffix.lower() != ".onnx":
+            self.logger.error("模型文件必须是.onnx格式: %s", args.onnx_model)
+            is_valid = False
+
+        # 检查文本输入
+        if not args.text and not args.text_file:
+            self.logger.error("ONNX TTS 模式需要指定文本：--text 或 --text-file")
+            return False
+
+        # 检查文本文件
+        if args.text_file:
+            text_file_path = Path(args.text_file)
+            if not text_file_path.exists():
+                self.logger.error("文本文件不存在: %s", args.text_file)
+                is_valid = False
+
+        # 检查配置文件
+        if args.onnx_config:
+            config_path = Path(args.onnx_config)
+            if not config_path.exists():
+                self.logger.error("配置文件不存在: %s", args.onnx_config)
+                is_valid = False
+
+        # 检查输出路径
+        if args.onnx_output:
+            output_path = Path(args.onnx_output)
+            # 确保输出目录存在
+            if not output_path.parent.exists():
+                try:
+                    output_path.parent.mkdir(parents=True, exist_ok=True)
+                    self.logger.info("创建输出目录: %s", output_path.parent)
+                except (IOError, OSError, PermissionError) as e:
+                    self.logger.error("无法创建输出目录: %s", str(e))
+                    is_valid = False
+
+        # 验证采样率
+        if args.onnx_sample_rate < 8000 or args.onnx_sample_rate > 48000:
+            self.logger.error("采样率必须在8000-48000之间")
+            is_valid = False
 
         return is_valid
 
@@ -789,6 +915,8 @@ class CLIInterface:
             initial_route = '/whisper'
         elif args.train:
             initial_route = '/train'
+        elif args.onnx_tts:
+            initial_route = '/onnx-tts'
         else:
             initial_route = '/'
 
@@ -856,6 +984,146 @@ class CLIInterface:
         # 返回退出码
         return 0 if result.success else 1
 
+    def _run_onnx_tts_mode(self, args: argparse.Namespace) -> int:
+        """运行ONNX TTS模式"""
+        self.logger.info("启动ONNX TTS模式")
+        
+        # 检查ONNX依赖
+        try:
+            from modules.tts.onnx import check_onnx_available
+            available, error = check_onnx_available()
+            if not available:
+                self.logger.error(error)
+                return 1
+        except ImportError as e:
+            self.logger.error(f"ONNX模块导入失败: {str(e)}")
+            return 1
+        
+        # 延迟导入ONNX模块
+        try:
+            from modules.tts.onnx import (
+                ONNXModelLoader,
+                ONNXInferenceEngine,
+                TextProcessor,
+                AudioProcessor
+            )
+            from datetime import datetime
+        except ImportError as e:
+            self.logger.error(f"ONNX模块导入失败: {str(e)}")
+            return 1
+        
+        # 验证必需参数
+        if not args.onnx_model:
+            self.logger.error("请指定ONNX模型文件路径 (--onnx-model)")
+            return 1
+        
+        if not args.text and not args.text_file:
+            self.logger.error("请指定待合成的文本 (--text) 或文本文件 (--text-file)")
+            return 1
+        
+        try:
+            # 1. 加载模型
+            self.logger.info(f"正在加载模型: {args.onnx_model}")
+            model_loader = ONNXModelLoader(
+                model_path=args.onnx_model,
+                device=args.onnx_device
+            )
+            
+            # 2. 初始化文本处理器
+            text_processor_config = {}
+            if args.onnx_config:
+                # 加载配置文件
+                config_path = Path(args.onnx_config)
+                if config_path.exists():
+                    self.logger.info(f"加载配置文件: {args.onnx_config}")
+                    text_processor = TextProcessor(config_file=args.onnx_config)
+                else:
+                    self.logger.warning(f"配置文件不存在: {args.onnx_config}，使用默认配置")
+                    text_processor = TextProcessor()
+            else:
+                text_processor = TextProcessor()
+            
+            # 3. 初始化推理引擎
+            def progress_callback(progress):
+                """进度回调函数"""
+                self.logger.info(f"[{progress.stage}] {progress.progress:.0f}% - {progress.message}")
+            
+            inference_engine = ONNXInferenceEngine(
+                model_loader=model_loader,
+                text_processor=text_processor,
+                progress_callback=progress_callback
+            )
+            
+            # 4. 获取待合成的文本
+            if args.text:
+                text_content = args.text
+            else:
+                # 从文件读取
+                text_file_path = Path(args.text_file)
+                if not text_file_path.exists():
+                    self.logger.error(f"文本文件不存在: {args.text_file}")
+                    return 1
+                with open(text_file_path, 'r', encoding='utf-8') as f:
+                    text_content = f.read().strip()
+            
+            self.logger.info(f"待合成文本: {text_content[:50]}...")
+            
+            # 5. 执行推理
+            self.logger.info("开始推理...")
+            output_dict = inference_engine.infer_text(
+                text=text_content,
+                input_format=args.input_format
+            )
+            
+            # 6. 处理音频输出
+            self.logger.info("处理音频输出...")
+            audio_processor = AudioProcessor(
+                sample_rate=args.onnx_sample_rate
+            )
+            
+            waveform = audio_processor.process_model_output(
+                output_dict=output_dict,
+                output_type=args.output_type
+            )
+            
+            # 7. 保存音频文件
+            if args.onnx_output:
+                output_path = Path(args.onnx_output)
+            else:
+                # 生成默认文件名
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                output_filename = f"onnx_tts_{timestamp}.{args.onnx_format}"
+                output_path = Path("output") / output_filename
+            
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            self.logger.info(f"保存音频文件: {output_path}")
+            saved_path = audio_processor.save_audio(
+                waveform=waveform,
+                output_path=output_path,
+                format=args.onnx_format
+            )
+            
+            # 8. 显示统计信息
+            stats = inference_engine.get_statistics()
+            self.logger.info("=" * 50)
+            self.logger.info("合成完成！")
+            self.logger.info(f"输出文件: {saved_path}")
+            self.logger.info(f"文件大小: {saved_path.stat().st_size / 1024:.1f} KB")
+            self.logger.info(f"推理次数: {stats['inference_count']}")
+            self.logger.info(f"平均耗时: {stats['average_time']:.3f} 秒")
+            self.logger.info(f"使用设备: {stats['device']}")
+            self.logger.info("=" * 50)
+            
+            return 0
+            
+        except Exception as e:
+            self.logger.error(f"ONNX TTS处理失败: {str(e)}")
+            if args.verbose:
+                import traceback
+                self.logger.error(traceback.format_exc())
+            return 1
+
     def run(self, args: Optional[List[str]] = None) -> int:
         """运行命令行接口"""
         exit_code = 0
@@ -881,6 +1149,8 @@ class CLIInterface:
                 exit_code = self._run_whisper_mode(parsed_args)
             elif parsed_args.train:
                 exit_code = self._run_train_mode(parsed_args)
+            elif parsed_args.onnx_tts:
+                exit_code = self._run_onnx_tts_mode(parsed_args)
             else:
                 # 不应该到达这里，因为验证已经检查过
                 self.logger.error("未选择操作模式")

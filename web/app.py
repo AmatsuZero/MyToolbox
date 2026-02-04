@@ -69,6 +69,13 @@ def _register_blueprints(app: Flask) -> None:
     
     app.register_blueprint(main_bp)
     app.register_blueprint(api_bp, url_prefix='/api')
+    
+    # 注册 ONNX TTS 蓝图（可选模块）
+    try:
+        from modules.tts.onnx.web_api import onnx_tts_bp
+        app.register_blueprint(onnx_tts_bp)
+    except ImportError:
+        pass  # ONNX TTS 模块未安装，跳过
 
 
 def _register_error_handlers(app: Flask) -> None:

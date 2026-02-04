@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ONNX TTS - 文本到语音合成</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+
+        .section-title::before {
+            content: '';
+            display: inline-block;
+            width: 4px;
+            height: 20px;
+            background: #667eea;
+            margin-right: 10px;
+            border-radius: 2px;
+        }
+
+        .upload-area {
+            border: 2px dashed #ddd;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #f9f9f9;
+        }
+
+        .upload-area:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        .upload-area.dragover {
+            border-color: #667eea;
+            background: #e8f0ff;
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .upload-text {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .model-info {
+            background: #f0f4ff;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+            display: none;
+        }
+
+        .model-info.show {
+            display: block;
+        }
+
+        .model-info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .model-info-item:last-child {
+            border-bottom: none;
+        }
+
+        .model-info-label {
+            font-weight: 600;
+            color: #555;
+        }
+
+        .model-info-value {
+            color: #667eea;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 120px;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            font-size: 14px;
+            font-family: inherit;
+            resize: vertical;
+            transition: border-color 0.3s;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .char-count {
+            text-align: right;
+            color: #999;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+
+        .options {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .option-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .option-label {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        select {
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .progress-container {
+            margin-top: 20px;
+            display: none;
+        }
+
+        .progress-container.show {
+            display: block;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .progress-text {
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .result-container {
+            margin-top: 20px;
+            display: none;
+        }
+
+        .result-container.show {
+            display: block;
+        }
+
+        .audio-player {
+            width: 100%;
+            margin-bottom: 15px;
+        }
+
+        .btn-secondary {
+            background: #f0f4ff;
+            color: #667eea;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #e0e8ff;
+        }
+
+        .error-message {
+            background: #ffe0e0;
+            color: #d32f2f;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .success-icon {
+            color: #4caf50;
+            font-size: 24px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎙️ ONNX TTS</h1>
+        <p class="subtitle">基于ONNX Runtime的文本到语音合成工具</p>
+
+        <!-- 模型上传区域 -->
+        <div class="section">
+            <div class="section-title">1. 上传ONNX模型</div>
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">📁</div>
+                <div class="upload-text">
+                    <strong>点击或拖拽上传ONNX模型文件</strong><br>
+                    <small>支持.onnx格式</small>
+                </div>
+                <input type="file" id="modelFile" class="file-input" accept=".onnx">
+            </div>
+            <div class="model-info" id="modelInfo">
+                <div class="model-info-item">
+                    <span class="model-info-label">文件名:</span>
+                    <span class="model-info-value" id="modelFilename">-</span>
+                </div>
+                <div class="model-info-item">
+                    <span class="model-info-label">文件大小:</span>
+                    <span class="model-info-value" id="modelSize">-</span>
+                </div>
+                <div class="model-info-item">
+                    <span class="model-info-label">设备:</span>
+                    <span class="model-info-value" id="modelDevice">-</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 文本输入区域 -->
+        <div class="section">
+            <div class="section-title">2. 输入待合成文本</div>
+            <textarea id="textInput" placeholder="请输入要合成的文本内容..."></textarea>
+            <div class="char-count">
+                <span id="charCount">0</span> / 1000 字符
+            </div>
+        </div>
+
+        <!-- 选项设置 -->
+        <div class="section">
+            <div class="section-title">3. 合成选项</div>
+            <div class="options">
+                <div class="option-group">
+                    <label class="option-label">输出格式</label>
+                    <select id="outputFormat">
+                        <option value="wav">WAV</option>
+                        <option value="mp3">MP3</option>
+                    </select>
+                </div>
+                <div class="option-group">
+                    <label class="option-label">采样率</label>
+                    <select id="sampleRate">
+                        <option value="16000">16000 Hz</option>
+                        <option value="22050" selected>22050 Hz</option>
+                        <option value="44100">44100 Hz</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- 生成按钮 -->
+        <button class="btn btn-primary" id="generateBtn" disabled>
+            <span>🎵 生成语音</span>
+        </button>
+
+        <!-- 进度显示 -->
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-text" id="progressText">准备中...</div>
+        </div>
+
+        <!-- 结果显示 -->
+        <div class="result-container" id="resultContainer">
+            <div class="section-title">✅ 合成完成</div>
+            <audio class="audio-player" id="audioPlayer" controls></audio>
+            <button class="btn btn-secondary" id="downloadBtn">
+                <span>⬇️ 下载音频文件</span>
+            </button>
+        </div>
+
+        <!-- 错误消息 -->
+        <div class="error-message" id="errorMessage"></div>
+    </div>
+
+    <script>
+        // 全局状态
+        let sessionId = null;
+        let modelUploaded = false;
+        let currentOutputFile = null;
+
+        // DOM元素
+        const uploadArea = document.getElementById('uploadArea');
+        const modelFile = document.getElementById('modelFile');
+        const modelInfo = document.getElementById('modelInfo');
+        const textInput = document.getElementById('textInput');
+        const charCount = document.getElementById('charCount');
+        const generateBtn = document.getElementById('generateBtn');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const resultContainer = document.getElementById('resultContainer');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const errorMessage = document.getElementById('errorMessage');
+
+        // 初始化会话
+        async function initSession() {
+            try {
+                const response = await fetch('/api/onnx-tts/session', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                if (data.success) {
+                    sessionId = data.session_id;
+                    console.log('Session created:', sessionId);
+                } else {
+                    showError('创建会话失败: ' + data.error);
+                }
+            } catch (error) {
+                showError('创建会话失败: ' + error.message);
+            }
+        }
+
+        // 文件上传
+        uploadArea.addEventListener('click', () => modelFile.click());
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFileUpload(files[0]);
+            }
+        });
+
+        modelFile.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileUpload(e.target.files[0]);
+            }
+        });
+
+        async function handleFileUpload(file) {
+            if (!file.name.endsWith('.onnx')) {
+                showError('请选择.onnx格式的模型文件');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('model_file', file);
+            formData.append('session_id', sessionId);
+            formData.append('device', 'auto');
+
+            try {
+                showProgress('上传模型中...', 50);
+
+                const response = await fetch('/api/onnx-tts/upload-model', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    modelUploaded = true;
+                    showModelInfo(data.model_info);
+                    hideProgress();
+                    updateGenerateButton();
+                    showSuccess('模型上传成功！');
+                } else {
+                    showError('模型上传失败: ' + data.error);
+                    hideProgress();
+                }
+            } catch (error) {
+                showError('模型上传失败: ' + error.message);
+                hideProgress();
+            }
+        }
+
+        function showModelInfo(info) {
+            document.getElementById('modelFilename').textContent = info.filename;
+            document.getElementById('modelSize').textContent = formatFileSize(info.size);
+            document.getElementById('modelDevice').textContent = info.device.toUpperCase();
+            modelInfo.classList.add('show');
+        }
+
+        // 字符计数
+        textInput.addEventListener('input', () => {
+            const length = textInput.value.length;
+            charCount.textContent = length;
+            updateGenerateButton();
+        });
+
+        function updateGenerateButton() {
+            const hasText = textInput.value.trim().length > 0;
+            generateBtn.disabled = !(modelUploaded && hasText);
+        }
+
+        // 生成语音
+        generateBtn.addEventListener('click', async () => {
+            const text = textInput.value.trim();
+            if (!text) {
+                showError('请输入文本内容');
+                return;
+            }
+
+            generateBtn.disabled = true;
+            resultContainer.classList.remove('show');
+            showProgress('准备推理...', 0);
+
+            try {
+                const response = await fetch('/api/onnx-tts/synthesize', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        text: text,
+                        output_format: document.getElementById('outputFormat').value,
+                        sample_rate: parseInt(document.getElementById('sampleRate').value),
+                        input_format: 'text',
+                        output_type: 'waveform'
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    currentOutputFile = data.output_file;
+                    showResult(data);
+                    hideProgress();
+                } else {
+                    showError('合成失败: ' + data.error);
+                    hideProgress();
+                }
+            } catch (error) {
+                showError('合成失败: ' + error.message);
+                hideProgress();
+            } finally {
+                generateBtn.disabled = false;
+            }
+        });
+
+        // 下载音频
+        downloadBtn.addEventListener('click', () => {
+            if (currentOutputFile) {
+                window.location.href = `/api/onnx-tts/download/${currentOutputFile}`;
+            }
+        });
+
+        // UI辅助函数
+        function showProgress(message, percent) {
+            progressContainer.classList.add('show');
+            progressFill.style.width = percent + '%';
+            progressText.textContent = message;
+        }
+
+        function hideProgress() {
+            progressContainer.classList.remove('show');
+        }
+
+        function showResult(data) {
+            resultContainer.classList.add('show');
+            audioPlayer.src = `/api/onnx-tts/download/${data.output_file}`;
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.add('show');
+            setTimeout(() => {
+                errorMessage.classList.remove('show');
+            }, 5000);
+        }
+
+        function showSuccess(message) {
+            // 可以添加成功提示
+            console.log('Success:', message);
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+        }
+
+        // 初始化
+        initSession();
+    </script>
+</body>
+</html>
