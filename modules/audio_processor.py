@@ -19,7 +19,7 @@ from typing import Optional, List
 from dataclasses import dataclass
 import logging
 
-from file_scanner import MediaFile
+from core.utils.file_scanner import MediaFile
 
 
 @dataclass

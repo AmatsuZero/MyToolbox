@@ -762,10 +762,10 @@ class CLIInterface:
     def _run_whisper_mode(self, args: argparse.Namespace) -> int:
         """运行 Whisper 字幕提取模式"""
         self.logger.info("启动 Whisper 字幕提取模式")
-        
+
         # 加载配置
         config = self._load_configuration(args)
-        
+
         # 处理逻辑
         if args.dry_run:
             return self._handle_dry_run(args)
@@ -775,15 +775,15 @@ class CLIInterface:
     def _run_gui_mode(self, args: argparse.Namespace) -> int:
         """运行 Web GUI 模式"""
         self.logger.info("启动 Web GUI 模式")
-        
+
         try:
             from web import create_app
             from web.app import run_app
         except ImportError as e:
-            self.logger.error("Web GUI 模块未安装，请安装可选依赖: pip install '.[gui]'")
+            self.logger.error("Web GUI 模块未安装，请安装可选依赖: uv sync --extra gui")
             self.logger.error("详细错误: %s", str(e))
             return 1
-        
+
         # 确定初始页面路由
         if args.whisper:
             initial_route = '/whisper'
@@ -791,10 +791,10 @@ class CLIInterface:
             initial_route = '/train'
         else:
             initial_route = '/'
-        
+
         # 创建并启动 Flask 应用
         app = create_app()
-        
+
         try:
             run_app(
                 app=app,
@@ -811,7 +811,7 @@ class CLIInterface:
     def _run_train_mode(self, args: argparse.Namespace) -> int:
         """运行 Mimic3 语音训练模式"""
         self.logger.info("启动 Mimic3 语音训练模式")
-        
+
         # 导入训练控制器和配置（延迟导入以避免循环依赖）
         try:
             from modules.training.train_controller import TrainController
@@ -819,7 +819,7 @@ class CLIInterface:
         except ImportError as e:
             self.logger.error("训练模块未安装，请确保 train_controller.py 和 train_config.py 存在: %s", str(e))
             return 1
-        
+
         # 将命令行参数转换为 TrainConfig 对象
         train_config = TrainConfig(
             input_dir=Path(args.train_input) if args.train_input else None,
@@ -830,13 +830,13 @@ class CLIInterface:
             sample_rate=args.train_sample_rate,
             verbose=args.verbose,
         )
-        
+
         # 如果指定了单个音频和字幕文件
         if args.train_audio:
             train_config.audio_files = [Path(args.train_audio)]
         if args.train_subtitle:
             train_config.subtitle_files = [Path(args.train_subtitle)]
-        
+
         # 加载额外的训练配置文件（如果提供）
         if args.train_config:
             try:
@@ -848,11 +848,11 @@ class CLIInterface:
                     # 其他配置项可以从文件中继承
             except Exception as e:
                 self.logger.warning("加载训练配置文件失败: %s", str(e))
-        
+
         # 创建训练控制器并运行
         controller = TrainController(train_config, verbose=args.verbose)
         result = controller.run()
-        
+
         # 返回退出码
         return 0 if result.success else 1
 

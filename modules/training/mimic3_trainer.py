@@ -16,6 +16,7 @@ from typing import Callable, Optional, List, Dict, Any
 from enum import Enum
 
 from modules.training.train_config import TrainConfig
+from modules.training.mimic3_checker import ensure_mimic3_available
 
 
 class TrainingStatus(Enum):
@@ -432,7 +433,8 @@ class Mimic3Trainer:
     
     def _is_mimic3_available(self) -> bool:
         """检查 Mimic3 训练脚本是否可用"""
-        return shutil.which(self.MIMIC3_TRAIN_SCRIPT) is not None
+        # 使用完整的依赖检查功能，提供详细的错误信息和安装指南
+        return ensure_mimic3_available()
     
     def _run_real_training(self, cmd: List[str], work_dir: Path) -> TrainingResult:
         """

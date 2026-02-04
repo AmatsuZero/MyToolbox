@@ -243,14 +243,14 @@ class Mimic3Checker:
 ║                                                                 ║
 ║  安装步骤:                                                      ║
 ║  ─────────                                                      ║
-║  1. 使用 pip 安装:                                              ║
-║     pip install mycroft-mimic3-tts                              ║
+║  1. 使用 uv 安装 (推荐):                                        ║
+║     uv sync --extra tts                                         ║
 ║                                                                 ║
-║  2. 安装特定版本 (推荐):                                        ║
-║     pip install mycroft-mimic3-tts==0.2.4                       ║
+║  2. 使用 uv pip 安装:                                           ║
+║     uv pip install mycroft-mimic3-tts==0.2.4                    ║
 ║                                                                 ║
 ║  3. 验证安装:                                                   ║
-║     mimic3 --version                                            ║
+║     uv run mimic3 --version                                    ║
 ║                                                                 ║
 ║  系统要求:                                                      ║
 ║  ─────────                                                      ║
