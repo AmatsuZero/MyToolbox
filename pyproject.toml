@@ -3,7 +3,7 @@ name = "mytoolbox"
 version = "0.1.0"
 description = "基于OpenAI Whisper的语音转文字工具"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.11,<3.12"
 dependencies = [
     "openai-whisper",
     "faster-whisper>=1.0.0",
@@ -19,12 +19,19 @@ gui = [
     "flask-cors>=4.0.0",
 ]
 tts = [
-    "mycroft-mimic3-tts>=0.2.4",
+    "TTS>=0.22.0",           # Coqui TTS (推理)
 ]
 onnx = [
     "onnxruntime>=1.16.0",
     "numpy>=1.24.0",
     "scipy>=1.11.0",
+]
+training = [
+    "TTS>=0.22.0",           # Coqui TTS (训练引擎)
+    "librosa>=0.10.0",       # 音频分析
+    "soundfile>=0.12.0",     # 音频文件读写
+    "packaging>=21.0",       # 版本检查
+    "torchcodec>=0.1.0",     # torchaudio 音频加载支持
 ]
 
 [tool.setuptools.packages.find]

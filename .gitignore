@@ -98,3 +98,4 @@ subtitles/
 error_log.*.json
 test/
 trained_models/
+output/

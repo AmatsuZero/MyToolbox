@@ -269,6 +269,8 @@ async function startTraining() {
             audio_files: uploadedAudioPaths,
             subtitle_files: uploadedSubtitlePaths,
             speaker_name: document.getElementById('speakerName').value || 'custom_voice',
+            model_type: document.getElementById('modelTypeSelect')?.value || 'vits',
+            language: document.getElementById('languageSelect')?.value || 'auto',
             epochs: parseInt(document.getElementById('epochsInput').value) || 100,
             batch_size: parseInt(document.getElementById('batchSizeInput').value) || 32,
             sample_rate: parseInt(document.getElementById('sampleRateSelect').value) || 22050
@@ -540,7 +542,7 @@ function renderTrainTaskHistory(tasks) {
             </div>
         `;
     }
-    
+
     html += '</div>';
     container.innerHTML = html;
 }

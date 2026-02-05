@@ -16,8 +16,9 @@
 - 生成处理摘要报告
 
 新增功能：
-- 双模式支持：Whisper 字幕提取模式 和 Mimic3 语音训练模式
+- 双模式支持：Whisper 字幕提取模式 和 Coqui TTS 语音训练模式
 - 通过 --whisper 和 --train 参数切换模式
+- 支持多种模型架构：VITS、FastSpeech2、Tacotron2、Glow-TTS
 
 Classes:
     CLIInterface: 命令行接口类，处理参数解析、文件处理和结果输出
@@ -70,10 +71,10 @@ class CLIInterface:
         """设置命令行参数解析器"""
 
         parser = argparse.ArgumentParser(
-            description="语音处理工具 - 支持字幕提取（Whisper）和语音模型训练（Mimic3）两种模式",
+            description="语音处理工具 - 支持字幕提取（Whisper）和语音模型训练（Coqui TTS）两种模式",
             epilog="""示例:
   字幕提取模式: python cli_interface.py --whisper --input downloads/ --model medium --language zh --output subtitles/
-  训练模式: python cli_interface.py --train --train-input data/ --train-output models/ --train-speaker-name my_voice
+  训练模式: python cli_interface.py --train --train-input data/ --train-output models/ --train-speaker-name my_voice --train-model-type vits
             """,
             formatter_class=argparse.RawDescriptionHelpFormatter,
         )
@@ -89,7 +90,7 @@ class CLIInterface:
         mode_exclusive.add_argument(
             "--train",
             action="store_true",
-            help="启用语音训练模式：使用 Mimic3 训练自定义语音模型",
+            help="启用语音训练模式：使用 Coqui TTS 训练自定义语音模型",
         )
         mode_exclusive.add_argument(
             "--onnx-tts",
@@ -263,6 +264,19 @@ class CLIInterface:
             type=str,
             default="custom_voice",
             help="说话人名称标识（默认：custom_voice）",
+        )
+        train_group.add_argument(
+            "--train-model-type",
+            type=str,
+            choices=["vits", "fast_speech2", "tacotron2", "glow_tts"],
+            default="vits",
+            help="模型架构类型（默认：vits），可选：vits, fast_speech2, tacotron2, glow_tts",
+        )
+        train_group.add_argument(
+            "--train-language",
+            type=str,
+            default="auto",
+            help="训练语言代码（默认：auto 自动检测），可选：auto, en, zh-cn, ja, ko 等",
         )
         train_group.add_argument(
             "--train-config",
@@ -937,8 +951,8 @@ class CLIInterface:
             return 1
 
     def _run_train_mode(self, args: argparse.Namespace) -> int:
-        """运行 Mimic3 语音训练模式"""
-        self.logger.info("启动 Mimic3 语音训练模式")
+        """运行 Coqui TTS 语音训练模式"""
+        self.logger.info("启动 Coqui TTS 语音训练模式")
 
         # 导入训练控制器和配置（延迟导入以避免循环依赖）
         try:
@@ -953,6 +967,8 @@ class CLIInterface:
             input_dir=Path(args.train_input) if args.train_input else None,
             output_path=Path(args.train_output),
             speaker_name=args.train_speaker_name,
+            model_type=getattr(args, 'train_model_type', 'vits'),
+            language=getattr(args, 'train_language', 'auto'),  # 支持 auto 自动检测
             epochs=args.train_epochs,
             batch_size=args.train_batch_size,
             sample_rate=args.train_sample_rate,

@@ -7,6 +7,7 @@ Whisper 字幕生成器模块
 """
 
 import logging
+import tempfile
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional, Callable
@@ -14,8 +15,12 @@ from enum import Enum
 
 from modules.whisper.whisper_integration import WhisperIntegration, ModelConfig, TranscriptionResult, create_model_config
 from modules.training.train_data_manager import MediaFile, MediaType, TrainDataPair
+from core.utils.format_converter import FormatConverter
 
 logger = logging.getLogger(__name__)
+
+# 需要先提取音频的视频格式
+VIDEO_FORMATS = {'.webm', '.mp4', '.mkv', '.avi', '.mov', '.flv', '.wmv', '.m4v'}
 
 
 class SubtitleFormat(Enum):
@@ -171,10 +176,41 @@ class WhisperSubtitleGenerator:
         
         logger.info(f"正在为 {media_path.name} 生成字幕...")
         
+        # 用于存储临时音频文件路径（需要转换时使用）
+        temp_audio_path: Optional[Path] = None
+        
         try:
+            # 确定要转录的音频文件路径
+            audio_path_to_transcribe = media_path
+            
+            # 处理视频文件时先提取音频
+            if media_path.suffix.lower() in VIDEO_FORMATS:
+                logger.info(f"检测到视频格式 {media_path.suffix}，正在提取音频...")
+                
+                # 使用临时目录存储提取的音频
+                temp_dir = Path(tempfile.mkdtemp(prefix="whisper_audio_"))
+                temp_audio_path = temp_dir / f"{media_path.stem}.wav"
+                
+                # 使用 FormatConverter 提取音频
+                converter = FormatConverter(output_dir=str(temp_dir))
+                extract_result = converter.extract_audio_from_video(media_path, output_format=".wav")
+                
+                if not extract_result.success:
+                    logger.error(f"音频提取失败: {extract_result.error_message}")
+                    return SubtitleGenerationResult(
+                        media_file=media_path,
+                        subtitle_path=None,
+                        success=False,
+                        error_message=f"音频提取失败: {extract_result.error_message}"
+                    )
+                
+                audio_path_to_transcribe = extract_result.output_file
+                temp_audio_path = extract_result.output_file
+                logger.info(f"音频提取成功: {audio_path_to_transcribe}")
+            
             # 调用 Whisper 进行转录
             result: TranscriptionResult = self._whisper.transcribe_audio(
-                media_path,
+                audio_path_to_transcribe,
                 language=self.language if self.language != "auto" else None
             )
             
@@ -211,6 +247,19 @@ class WhisperSubtitleGenerator:
                 success=False,
                 error_message=error_msg
             )
+        
+        finally:
+            # 清理临时音频文件
+            if temp_audio_path and temp_audio_path.exists():
+                try:
+                    temp_audio_path.unlink()
+                    # 尝试删除临时目录（如果为空）
+                    temp_dir = temp_audio_path.parent
+                    if temp_dir.exists() and not any(temp_dir.iterdir()):
+                        temp_dir.rmdir()
+                    logger.debug(f"已清理临时音频文件: {temp_audio_path}")
+                except OSError as cleanup_error:
+                    logger.warning(f"清理临时文件失败: {cleanup_error}")
     
     def _write_subtitle_file(
         self,

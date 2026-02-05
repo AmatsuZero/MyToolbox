@@ -1,20 +1,53 @@
 """
 训练模式配置模块
 
-该模块定义了 Mimic3 语音模型训练所需的配置参数和管理功能。
+该模块定义了语音模型训练所需的配置参数和管理功能。
+支持 Coqui TTS 训练框架。
 """
 
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Literal
+from enum import Enum
 import json
 import yaml
+
+
+class ModelType(Enum):
+    """支持的模型架构类型"""
+    VITS = "vits"                    # VITS - 端到端模型，推荐使用
+    FAST_SPEECH2 = "fast_speech2"    # FastSpeech2 - 快速推理
+    TACOTRON2 = "tacotron2"          # Tacotron2 - 经典模型
+    GLOW_TTS = "glow_tts"            # Glow-TTS - 流式模型
+
+
+@dataclass
+class AudioConfig:
+    """
+    音频处理配置
+    
+    包含 Coqui TTS 所需的音频参数配置
+    """
+    sample_rate: int = 22050           # 音频采样率 (Hz)
+    hop_length: int = 256              # STFT hop length
+    win_length: int = 1024             # STFT window length
+    fft_size: int = 1024               # FFT size
+    num_mels: int = 80                 # Mel 频带数
+    mel_fmin: float = 0.0              # Mel 最低频率
+    mel_fmax: Optional[float] = None   # Mel 最高频率（None 表示 sample_rate/2）
+    preemphasis: float = 0.0           # 预加重系数
+    ref_level_db: float = 20.0         # 参考电平 dB
+    min_level_db: float = -100.0       # 最小电平 dB
+    
+    def to_dict(self) -> dict:
+        """转换为字典"""
+        return asdict(self)
 
 
 @dataclass
 class TrainConfig:
     """
-    Mimic3 训练配置数据类
+    Coqui TTS 训练配置数据类
     
     包含训练过程中所需的所有配置参数，支持从文件加载和导出。
     """
@@ -27,24 +60,54 @@ class TrainConfig:
     # 输出配置
     output_path: Path = field(default_factory=lambda: Path("./models/custom_voice"))  # 模型输出目录
     
+    # 模型配置 (Coqui TTS 特有)
+    model_type: str = "vits"  # 模型架构类型: vits, fast_speech2, tacotron2, glow_tts
+    
     # 训练超参数
     epochs: int = 100  # 训练轮数
     batch_size: int = 32  # 批处理大小
-    learning_rate: float = 0.001  # 学习率
+    learning_rate: float = 0.0002  # 学习率 (Coqui TTS 默认值)
     
     # 音频处理参数
     sample_rate: int = 22050  # 音频采样率 (Hz)
     
+    # Coqui TTS 音频配置
+    audio_config: AudioConfig = field(default_factory=AudioConfig)
+    
     # 说话人配置
     speaker_name: str = "custom_speaker"  # 说话人名称标识
+    language: str = "auto"  # 语言代码（auto 表示自动检测）
     
     # 训练控制参数
-    checkpoint_interval: int = 10  # 检查点保存间隔（每 N 个 epoch）
-    early_stopping_patience: int = 10  # 早停耐心值
+    checkpoint_interval: int = 1000  # 检查点保存间隔（每 N 步）
+    eval_interval: int = 500  # 评估间隔（每 N 步）
+    print_interval: int = 50  # 打印间隔（每 N 步）
+    early_stopping_patience: int = 10  # 早停耐心值（轮数）
+    
+    # Coqui TTS 特有参数
+    use_phonemes: bool = False  # 是否使用音素
+    phoneme_language: str = "auto"  # 音素语言（auto 表示自动检测）
+    text_cleaner: str = "basic_cleaners"  # 文本清理器
+    max_text_length: int = 500  # 最大文本长度
+    max_audio_length: int = 10  # 最大音频长度（秒）
+    min_audio_length: float = 0.5  # 最小音频长度（秒）
+    
+    # 数据增强
+    use_data_augmentation: bool = False  # 是否使用数据增强
+    augmentation_noise_level: float = 0.001  # 噪声增强级别
+    
+    # GPU/设备配置
+    device: str = "auto"  # 训练设备: auto, cuda, mps, cpu
+    mixed_precision: bool = True  # 是否使用混合精度训练
+    num_workers: int = 4  # 数据加载器工作进程数
+    
+    # 恢复训练
+    resume_checkpoint: Optional[Path] = None  # 恢复训练的检查点路径
     
     # 日志和调试
     verbose: bool = False  # 是否输出详细日志
     log_file: Optional[Path] = None  # 日志文件路径
+    tensorboard: bool = True  # 是否启用 TensorBoard 日志
     
     def __post_init__(self):
         """初始化后处理，确保路径类型正确"""
@@ -54,10 +117,20 @@ class TrainConfig:
             self.output_path = Path(self.output_path)
         if self.log_file is not None and not isinstance(self.log_file, Path):
             self.log_file = Path(self.log_file)
+        if self.resume_checkpoint is not None and not isinstance(self.resume_checkpoint, Path):
+            self.resume_checkpoint = Path(self.resume_checkpoint)
         
         # 转换列表中的路径
         self.audio_files = [Path(f) if not isinstance(f, Path) else f for f in self.audio_files]
         self.subtitle_files = [Path(f) if not isinstance(f, Path) else f for f in self.subtitle_files]
+        
+        # 确保 audio_config 是 AudioConfig 实例
+        if isinstance(self.audio_config, dict):
+            self.audio_config = AudioConfig(**self.audio_config)
+        
+        # 同步 sample_rate
+        if self.audio_config.sample_rate != self.sample_rate:
+            self.audio_config.sample_rate = self.sample_rate
     
     @classmethod
     def from_dict(cls, data: dict) -> "TrainConfig":
@@ -73,6 +146,11 @@ class TrainConfig:
         # 过滤掉不在数据类字段中的键
         valid_fields = {f.name for f in cls.__dataclass_fields__.values()}
         filtered_data = {k: v for k, v in data.items() if k in valid_fields}
+        
+        # 处理 audio_config
+        if 'audio_config' in filtered_data and isinstance(filtered_data['audio_config'], dict):
+            filtered_data['audio_config'] = AudioConfig(**filtered_data['audio_config'])
+        
         return cls(**filtered_data)
     
     @classmethod
@@ -183,6 +261,11 @@ class TrainConfig:
         """
         errors = []
         
+        # 验证模型类型
+        valid_model_types = ["vits", "fast_speech2", "tacotron2", "glow_tts"]
+        if self.model_type not in valid_model_types:
+            errors.append(f"不支持的模型类型: {self.model_type}，支持: {', '.join(valid_model_types)}")
+        
         # 验证训练参数
         if self.epochs <= 0:
             errors.append(f"训练轮数 (epochs) 必须为正整数，当前值: {self.epochs}")
@@ -214,11 +297,67 @@ class TrainConfig:
         if not self.speaker_name or not self.speaker_name.strip():
             errors.append("说话人名称 (speaker_name) 不能为空")
         
+        # 验证恢复检查点
+        if self.resume_checkpoint is not None and not self.resume_checkpoint.exists():
+            errors.append(f"恢复检查点不存在: {self.resume_checkpoint}")
+        
+        # 验证设备
+        valid_devices = ["auto", "cuda", "mps", "cpu"]
+        if self.device not in valid_devices:
+            errors.append(f"不支持的设备类型: {self.device}，支持: {', '.join(valid_devices)}")
+        
         return errors
     
     def ensure_output_dir(self) -> None:
         """确保输出目录存在，如不存在则创建"""
         self.output_path.mkdir(parents=True, exist_ok=True)
+    
+    def get_effective_device(self) -> str:
+        """
+        获取实际使用的设备
+        
+        Returns:
+            str: "cuda", "mps" 或 "cpu"
+        """
+        if self.device != "auto":
+            return self.device
+        
+        try:
+            import torch
+            
+            # 优先检查 CUDA
+            if torch.cuda.is_available():
+                return "cuda"
+            
+            # 检查 MPS (Apple Silicon)
+            if hasattr(torch.backends, 'mps'):
+                try:
+                    if torch.backends.mps.is_available() and torch.backends.mps.is_built():
+                        return "mps"
+                except Exception:
+                    # MPS 检测失败，回退到 CPU
+                    pass
+            
+            # 默认使用 CPU
+            return "cpu"
+            
+        except ImportError:
+            return "cpu"
+    
+    def get_model_type_enum(self) -> ModelType:
+        """
+        获取模型类型枚举值
+        
+        Returns:
+            ModelType: 模型类型枚举
+        """
+        type_map = {
+            "vits": ModelType.VITS,
+            "fast_speech2": ModelType.FAST_SPEECH2,
+            "tacotron2": ModelType.TACOTRON2,
+            "glow_tts": ModelType.GLOW_TTS,
+        }
+        return type_map.get(self.model_type, ModelType.VITS)
     
     def get_summary(self) -> str:
         """
@@ -227,11 +366,15 @@ class TrainConfig:
         Returns:
             配置摘要字符串
         """
+        device = self.get_effective_device()
+        
         lines = [
-            "=" * 50,
-            "训练配置摘要",
-            "=" * 50,
+            "=" * 60,
+            "Coqui TTS 训练配置摘要",
+            "=" * 60,
             f"说话人名称: {self.speaker_name}",
+            f"语言: {self.language}",
+            f"模型类型: {self.model_type.upper()}",
             f"输出目录: {self.output_path}",
             "",
             "训练参数:",
@@ -239,6 +382,13 @@ class TrainConfig:
             f"  - 批处理大小: {self.batch_size}",
             f"  - 学习率: {self.learning_rate}",
             f"  - 采样率: {self.sample_rate} Hz",
+            f"  - 训练设备: {device.upper()}",
+            f"  - 混合精度: {'是' if self.mixed_precision else '否'}",
+            "",
+            "音频配置:",
+            f"  - Mel 频带数: {self.audio_config.num_mels}",
+            f"  - FFT 大小: {self.audio_config.fft_size}",
+            f"  - Hop Length: {self.audio_config.hop_length}",
             "",
             "输入数据:",
         ]
@@ -253,11 +403,17 @@ class TrainConfig:
         lines.extend([
             "",
             "控制参数:",
-            f"  - 检查点间隔: 每 {self.checkpoint_interval} 轮",
-            f"  - 早停耐心值: {self.early_stopping_patience}",
+            f"  - 检查点间隔: 每 {self.checkpoint_interval} 步",
+            f"  - 评估间隔: 每 {self.eval_interval} 步",
+            f"  - 早停耐心值: {self.early_stopping_patience} 轮",
             f"  - 详细日志: {'是' if self.verbose else '否'}",
-            "=" * 50,
+            f"  - TensorBoard: {'是' if self.tensorboard else '否'}",
         ])
+        
+        if self.resume_checkpoint:
+            lines.append(f"  - 恢复检查点: {self.resume_checkpoint}")
+        
+        lines.append("=" * 60)
         
         return "\n".join(lines)
 
@@ -276,10 +432,12 @@ def create_sample_config(output_path: Path) -> None:
     sample_config = TrainConfig(
         input_dir=Path("./training_data"),
         output_path=Path("./models/my_voice"),
+        model_type="vits",
         epochs=100,
-        batch_size=32,
+        batch_size=16,
         sample_rate=22050,
         speaker_name="my_custom_voice",
+        language="zh-cn",
         verbose=True
     )
     
@@ -292,3 +450,42 @@ def create_sample_config(output_path: Path) -> None:
         sample_config.to_json(output_path.with_suffix('.json'))
     
     print(f"示例配置文件已创建: {output_path}")
+
+
+def get_recommended_config_for_model(model_type: str) -> dict:
+    """
+    获取特定模型类型的推荐配置
+    
+    Args:
+        model_type: 模型类型
+        
+    Returns:
+        dict: 推荐配置字典
+    """
+    configs = {
+        "vits": {
+            "batch_size": 16,
+            "learning_rate": 0.0002,
+            "checkpoint_interval": 1000,
+            "eval_interval": 500,
+        },
+        "fast_speech2": {
+            "batch_size": 32,
+            "learning_rate": 0.001,
+            "checkpoint_interval": 2000,
+            "eval_interval": 1000,
+        },
+        "tacotron2": {
+            "batch_size": 32,
+            "learning_rate": 0.001,
+            "checkpoint_interval": 2000,
+            "eval_interval": 1000,
+        },
+        "glow_tts": {
+            "batch_size": 16,
+            "learning_rate": 0.0001,
+            "checkpoint_interval": 1000,
+            "eval_interval": 500,
+        },
+    }
+    return configs.get(model_type, configs["vits"])

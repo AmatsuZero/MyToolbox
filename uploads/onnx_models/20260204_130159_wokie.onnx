@@ -1,7 +1,0 @@
-{
-  "speaker_name": "wokie",
-  "sample_rate": 22050,
-  "epochs": 100,
-  "final_loss": 0.019230769230769232,
-  "note": "这是模拟训练生成的占位文件，实际使用需要安装 Mimic3"
-}

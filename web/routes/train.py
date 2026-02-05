@@ -49,6 +49,8 @@ def process_train_task(task_id: str, config_dict: dict):
             input_dir=Path(config_dict['input_dir']) if config_dict.get('input_dir') else None,
             output_path=Path(config_dict.get('output_dir', 'trained_models')),
             speaker_name=config_dict.get('speaker_name', 'custom_voice'),
+            model_type=config_dict.get('model_type', 'vits'),
+        language=config_dict.get('language', 'auto'),  # 默认自动检测
             epochs=config_dict.get('epochs', 100),
             batch_size=config_dict.get('batch_size', 32),
             sample_rate=config_dict.get('sample_rate', 22050),
@@ -191,6 +193,8 @@ def start_train_task():
         'subtitle_files': data.get('subtitle_files', []),
         'output_dir': data.get('output_dir', 'trained_models'),
         'speaker_name': data.get('speaker_name', 'custom_voice'),
+        'model_type': data.get('model_type', 'vits'),
+        'language': data.get('language', 'auto'),  # 默认自动检测
         'epochs': data.get('epochs', 100),
         'batch_size': data.get('batch_size', 32),
         'sample_rate': data.get('sample_rate', 22050)
@@ -239,6 +243,19 @@ def get_train_config_options():
     GET /api/train/config
     """
     options = {
+        'model_types': [
+            {'value': 'vits', 'label': 'VITS - 推荐（端到端，高质量）'},
+            {'value': 'glow_tts', 'label': 'Glow-TTS - 流式模型'},
+            {'value': 'fast_speech2', 'label': 'FastSpeech2 - 快速推理'},
+            {'value': 'tacotron2', 'label': 'Tacotron2 - 经典模型'}
+        ],
+        'languages': [
+            {'value': 'auto', 'label': '自动检测 (auto)'},
+            {'value': 'en', 'label': '英语 (en)'},
+            {'value': 'zh-cn', 'label': '中文 (zh-cn)'},
+            {'value': 'ja', 'label': '日语 (ja)'},
+            {'value': 'ko', 'label': '韩语 (ko)'}
+        ],
         'epochs': {
             'default': 100,
             'min': 1,

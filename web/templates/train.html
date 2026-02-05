@@ -61,6 +61,31 @@
                     <div class="form-text">用于标识训练后的语音模型</div>
                 </div>
 
+                <!-- 模型架构类型 -->
+                <div class="mb-3">
+                    <label for="modelTypeSelect" class="form-label">模型架构</label>
+                    <select class="form-select" id="modelTypeSelect">
+                        <option value="vits" selected>VITS - 推荐（端到端，高质量）</option>
+                        <option value="glow_tts">Glow-TTS - 流式模型</option>
+                        <option value="fast_speech2">FastSpeech2 - 快速推理</option>
+                        <option value="tacotron2">Tacotron2 - 经典模型</option>
+                    </select>
+                    <div class="form-text">推荐使用 VITS 获得最佳语音质量</div>
+                </div>
+
+                <!-- 训练语言 -->
+                <div class="mb-3">
+                    <label for="languageSelect" class="form-label">训练语言</label>
+                    <select class="form-select" id="languageSelect">
+                        <option value="auto" selected>自动检测 (auto)</option>
+                        <option value="en">英语 (en)</option>
+                        <option value="zh-cn">中文 (zh-cn)</option>
+                        <option value="ja">日语 (ja)</option>
+                        <option value="ko">韩语 (ko)</option>
+                    </select>
+                    <div class="form-text">系统会自动检测训练数据的语言</div>
+                </div>
+
                 <!-- 训练轮数 -->
                 <div class="mb-3">
                     <label for="epochsInput" class="form-label">训练轮数 (Epochs)</label>

@@ -432,9 +432,27 @@ class Mimic3Trainer:
         return result
     
     def _is_mimic3_available(self) -> bool:
-        """检查 Mimic3 训练脚本是否可用"""
-        # 使用完整的依赖检查功能，提供详细的错误信息和安装指南
-        return ensure_mimic3_available()
+        """检查 Mimic3 训练脚本是否可用
+        
+        专门检查 mimic3-train 命令行工具是否在 PATH 中，
+        而不仅仅是检查 Python 包是否安装。
+        """
+        # 检查 mimic3-train 命令是否存在于 PATH 中
+        if shutil.which("mimic3-train"):
+            return True
+        
+        # 命令行工具不可用，打印警告信息
+        self._log("=" * 60)
+        self._log("⚠️ 警告: mimic3-train 命令未找到！")
+        self._log("=" * 60)
+        self._log("将使用【模拟训练模式】，此模式不会生成有效的 ONNX 模型。")
+        self._log("模拟训练仅用于测试训练流程，生成的文件无法用于语音合成。")
+        self._log("")
+        self._log("如需生成真正可用的 ONNX 模型，请先安装 mimic3-train:")
+        self._log("  pip install mimic3-train")
+        self._log("或参考官方文档: https://github.com/MycroftAI/mimic3")
+        self._log("=" * 60)
+        return False
     
     def _run_real_training(self, cmd: List[str], work_dir: Path) -> TrainingResult:
         """
@@ -572,36 +590,40 @@ class Mimic3Trainer:
                 
                 self._log(f"Epoch {epoch}/{total_epochs} 完成, Loss: {self._progress.loss:.4f}")
             
-            # 创建模拟的模型文件
+            # 创建模拟的训练信息文件（注意：这不是有效的 ONNX 模型！）
             model_dir = self.config.output_path / "model"
             model_dir.mkdir(parents=True, exist_ok=True)
             
-            model_path = model_dir / f"{self.config.speaker_name}.onnx"
+            # 使用 .json 后缀，明确表明这不是 ONNX 模型
+            info_path = model_dir / f"{self.config.speaker_name}_training_info.json"
             
-            # 写入模拟的模型文件（实际应为真实模型）
+            # 写入训练信息文件（仅用于记录，不是可用模型）
             model_info = {
                 "speaker_name": self.config.speaker_name,
                 "sample_rate": self.config.sample_rate,
                 "epochs": self.config.epochs,
                 "final_loss": self._progress.loss,
-                "note": "这是模拟训练生成的占位文件，实际使用需要安装 Mimic3"
+                "warning": "⚠️ 这是模拟训练生成的信息文件，不是有效的 ONNX 模型！",
+                "solution": "请安装 mimic3-train 后重新训练以生成真正的 ONNX 模型: pip install mimic3-train"
             }
-            with open(model_path, 'w', encoding='utf-8') as f:
+            with open(info_path, 'w', encoding='utf-8') as f:
                 json.dump(model_info, f, indent=2, ensure_ascii=False)
             
             result.success = True
-            result.model_path = model_path
-            result.model_size = model_path.stat().st_size
+            result.model_path = info_path  # 返回信息文件路径
+            result.model_size = info_path.stat().st_size
             result.total_epochs = total_epochs
             result.final_loss = self._progress.loss
             result.training_time = time.time() - self._start_time
             
             self._update_progress(
                 status=TrainingStatus.COMPLETED,
-                message="模拟训练完成"
+                message="模拟训练完成（注意：未生成有效的 ONNX 模型）"
             )
             
-            self._log(f"模拟训练完成，模型已保存至: {model_path}")
+            self._log("⚠️ 警告: 模拟训练已完成，但由于 mimic3-train 未安装，没有生成有效的 ONNX 模型！")
+            self._log("💡 解决方案: 请安装 mimic3-train 后重新训练: pip install mimic3-train")
+            self._log(f"训练信息已保存至: {info_path}")
             
         except Exception as e:
             result.success = False

@@ -4,9 +4,9 @@
 
 该模块是整个语音处理系统的核心入口，支持两种操作模式：
 1. Whisper 字幕提取模式：从音视频文件中提取字幕
-2. Mimic3 语音训练模式：训练自定义语音模型
+2. Coqui TTS 语音训练模式：训练自定义语音模型
 
-基于 OpenAI Whisper 的语音识别系统和 Mimic3 TTS 训练框架。
+基于 OpenAI Whisper 的语音识别系统和 Coqui TTS 训练框架。
 
 主要功能包括：
 - 系统组件的初始化和资源管理
@@ -14,7 +14,7 @@
 - 音视频文件的预处理和格式转换
 - 使用Whisper模型进行语音识别
 - 生成多种格式的字幕文件
-- 使用Mimic3训练自定义语音模型
+- 使用Coqui TTS训练自定义语音模型
 - 批量处理多个文件
 - 生成处理摘要报告
 - 错误处理和性能监控
@@ -829,10 +829,11 @@ def print_usage_info():
    python main.py --whisper --input downloads/ --model medium --language zh --output subtitles/
 
 2. 语音训练模式 (--train)
-   使用音频和字幕数据训练自定义 Mimic3 语音模型
+   使用音频和字幕数据训练自定义 Coqui TTS 语音模型
+   支持多种模型架构：VITS、FastSpeech2、Tacotron2、Glow-TTS
    
    示例:
-   python main.py --train --train-input data/ --train-output models/ --train-speaker-name my_voice
+   python main.py --train --train-input data/ --train-output models/ --train-speaker-name my_voice --train-model-type vits
 
 3. ONNX TTS 模式 (--onnx-tts)
    使用 ONNX Runtime 进行文本到语音合成
